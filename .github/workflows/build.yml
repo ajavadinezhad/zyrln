@@ -1,3 +1,10 @@
+name: Build
+
+on:
+  push:
+    tags:
+    - v*
+
 jobs:
   build-linux:
     runs-on: ubuntu-latest
@@ -39,17 +46,11 @@ jobs:
     - uses: actions/download-artifact@v4
       with:
         path: .
-    - env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      name: Create Release
+        merge-multiple: true
+    - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
-        files:
-        - zyrln-linux-amd64
-        - zyrln-windows-amd64.exe
+        files: zyrln-*
         generate_release_notes: true
-name: Build
-'on':
-  push:
-    tags:
-    - v*
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

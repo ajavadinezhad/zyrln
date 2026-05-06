@@ -109,7 +109,12 @@ Install `certs/zyrln-ca.pem` as a trusted CA in your browser:
 Start the proxy:
 
 ```bash
+# Option 1: CLI mode
 make proxy
+
+# Option 2: Browser-based GUI (recommended)
+make gui
+# Opens at http://127.0.0.1:8086 with tabs for Control, Config, and Tools
 ```
 
 Set your browser's HTTP and HTTPS proxy to `127.0.0.1:8085`.
@@ -147,9 +152,30 @@ See **[docs/android-setup.md](docs/android-setup.md)** for the full build and in
 ```bash
 make desktop        # build desktop CLI binary
 make proxy          # start desktop proxy (reads config.env)
+make gui            # start browser-based GUI at http://127.0.0.1:8086
 make test           # smoke test the full relay chain
 make android        # build signed release APK (requires keystore + Android SDK)
 make android-debug  # build debug APK (no keystore needed)
+```
+
+### GUI Mode
+
+The GUI provides a browser-based interface with a modern tab layout:
+
+- **Control tab**: Big circle button (VPN-style) to start/stop proxy, config validation before start, **live proxy logs**
+- **Config tab**: Edit `config.env` (all flags as form fields)
+- **Tools tab**: Generate CA, test relay, run probes, export config for Android
+
+Features:
+- Auto-opens browser when GUI starts (supports Linux/macOS/Windows)
+- Config validation check before proxy start
+- Real-time status updates and proxy log viewer
+
+```bash
+# Start GUI (opens at http://127.0.0.1:8086)
+make gui
+# Or with custom port:
+go run ./platforms/desktop/ -gui -gui-listen=127.0.0.1:9090
 ```
 
 ---

@@ -62,6 +62,6 @@ jobs:
           files: |
             artifacts/zyrln-linux-amd64
             artifacts/zyrln-windows-amd64.exe
-          generate-release-notes: true
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

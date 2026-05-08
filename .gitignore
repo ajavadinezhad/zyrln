@@ -42,3 +42,4 @@ TODO.md
 *.apk
 *.exe
 zyrln-linux-amd64
+docs/node_modules

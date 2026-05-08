@@ -9,10 +9,17 @@ const SKIP_HEADERS = {
   "transfer-encoding": true,
   "proxy-connection": true,
   "proxy-authorization": true,
+  "x-exit-relay-url": true
 };
 
 function doPost(e) {
   try {
+    const dynamicExitUrl = e?.parameter?.exitUrl || e?.headers?.["X-Exit-Relay-Url"] || EXIT_RELAY_URL;
+    
+    if (e && e.headers && e.headers["X-Exit-Relay-Url"]) {
+      delete e.headers["X-Exit-Relay-Url"];
+    }
+
     const req = JSON.parse(e.postData.contents);
     if (req.k !== AUTH_KEY) {
       return json_({ e: "unauthorized" });
@@ -20,18 +27,18 @@ function doPost(e) {
     if (Array.isArray(req.q)) {
       return doBatch_(req.q);
     }
-    return doSingle_(req);
+    return doSingle_(req, dynamicExitUrl);
   } catch (err) {
     return json_({ e: String(err) });
   }
 }
 
-function doSingle_(req) {
+function doSingle_(req, exitRelayUrl) {
   if (!isValidRelayRequest_(req)) {
     return json_({ e: "bad url" });
   }
 
-  const resp = UrlFetchApp.fetch(EXIT_RELAY_URL, {
+  const resp = UrlFetchApp.fetch(exitRelayUrl, {
     method: "post",
     contentType: "application/json",
     payload: JSON.stringify(buildWorkerPayload_(req)),

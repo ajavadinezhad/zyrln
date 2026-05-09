@@ -105,7 +105,7 @@ export default defineConfig({
   },
 
   themeConfig: {
-    logo: '/logo.png',
+    logo: '/public/logo.png',
     siteTitle: 'Zyrln',
     socialLinks: [
       { icon: 'github', link: 'https://github.com/ajavadinezhad/zyrln' }

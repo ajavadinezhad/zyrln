@@ -389,7 +389,7 @@ body:not(.rtl) .main-header {
 }
 
 .connect-btn.warning:hover {
-    box-shadow: 0 4px 16px color-mix(in srgb, var(--accent-error) 48%, transparent);
+    box-shadow: 0 4px 16px color-mix(in srgb, var(--accent-warning) 48%, transparent);
 }
 
 .connect-btn:disabled {

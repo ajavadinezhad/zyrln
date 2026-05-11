@@ -93,9 +93,6 @@ gomobile init
 # ساخت
 make keystore        # ساخت کلید امضا (یک بار)
 make android         # APK نهایی امضاشده
-
-# نسخه دیباگ (بدون keystore)
-make android-debug
 ```
 
 </div>

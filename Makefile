@@ -5,19 +5,56 @@ GOFLAGS      ?= -buildvcs=false
 AAR_OUT       = android/app/libs/mobile.aar
 APK_VERSION   = 1.5.1
 APK_RELEASE   = android/app/build/outputs/apk/release/zyrln-$(APK_VERSION).apk
-APK_DEBUG     = android/app/build/outputs/apk/debug/zyrln-$(APK_VERSION)-debug.apk
+DESKTOP_VERSION ?= $(APK_VERSION)
+DIST_DIR      = dist
+DESKTOP_LINUX = $(DIST_DIR)/zyrln-$(DESKTOP_VERSION)-linux-amd64
+DESKTOP_WIN   = $(DIST_DIR)/zyrln-$(DESKTOP_VERSION)-windows-amd64.exe
+DESKTOP_MAC_ARM64 = $(DIST_DIR)/zyrln-$(DESKTOP_VERSION)-darwin-arm64
+DESKTOP_MAC_AMD64 = $(DIST_DIR)/zyrln-$(DESKTOP_VERSION)-darwin-amd64
 
 export ANDROID_HOME
 export GOTOOLCHAIN
 export GOFLAGS
 
-.PHONY: all desktop gui proxy test android android-debug keystore clean
+.PHONY: all desktop desktop-release desktop-linux desktop-windows desktop-macos desktop-macos-arm64 desktop-macos-amd64 gui proxy test android keystore clean
 
 all: desktop
 
 ## Build the desktop CLI binary.
 desktop:
 	GOCACHE=$(GOCACHE) go build -o zyrln ./platforms/desktop/
+
+## Build all desktop release binaries into dist/.
+desktop-release: desktop-linux desktop-windows desktop-macos
+	@echo "Desktop release binaries:"
+	@ls -lh $(DESKTOP_LINUX) $(DESKTOP_WIN) $(DESKTOP_MAC_ARM64) $(DESKTOP_MAC_AMD64)
+
+## Build the Linux desktop binary.
+desktop-linux:
+	@mkdir -p $(DIST_DIR)
+	GOOS=linux GOARCH=amd64 GOCACHE=$(GOCACHE) go build -o $(DESKTOP_LINUX) ./platforms/desktop/
+	@echo "Linux → $(DESKTOP_LINUX)"
+
+## Build the Windows desktop binary.
+desktop-windows:
+	@mkdir -p $(DIST_DIR)
+	GOOS=windows GOARCH=amd64 GOCACHE=$(GOCACHE) go build -o $(DESKTOP_WIN) ./platforms/desktop/
+	@echo "Windows → $(DESKTOP_WIN)"
+
+## Build both macOS desktop binaries.
+desktop-macos: desktop-macos-arm64 desktop-macos-amd64
+
+## Build the macOS Apple Silicon desktop binary.
+desktop-macos-arm64:
+	@mkdir -p $(DIST_DIR)
+	GOOS=darwin GOARCH=arm64 GOCACHE=$(GOCACHE) go build -o $(DESKTOP_MAC_ARM64) ./platforms/desktop/
+	@echo "macOS arm64 → $(DESKTOP_MAC_ARM64)"
+
+## Build the macOS Intel desktop binary.
+desktop-macos-amd64:
+	@mkdir -p $(DIST_DIR)
+	GOOS=darwin GOARCH=amd64 GOCACHE=$(GOCACHE) go build -o $(DESKTOP_MAC_AMD64) ./platforms/desktop/
+	@echo "macOS amd64 → $(DESKTOP_MAC_AMD64)"
 
 ## Start the desktop relay proxy (reads config.env).
 proxy:
@@ -82,24 +119,6 @@ android:
 	cd android && ./gradlew assembleRelease
 	@echo "APK → $(APK_RELEASE)"
 
-## Build a debug APK (no keystore needed).
-android-debug:
-	@if ! command -v gomobile >/dev/null 2>&1 && [ ! -f $(HOME)/go/bin/gomobile ]; then \
-		echo "gomobile not found. Run this first:"; \
-		echo "  go install golang.org/x/mobile/cmd/gomobile@latest && gomobile init"; \
-		exit 1; \
-	fi
-	@echo "Building gomobile AAR..."
-	@mkdir -p android/app/libs
-	PATH=$(PATH):$(HOME)/go/bin GOCACHE=$(GOCACHE) gomobile bind \
-		-target android \
-		-androidapi 21 \
-		-o $(AAR_OUT) \
-		zyrln/platforms/mobile
-	cd android && ./gradlew assembleDebug
-	@echo "APK → $(APK_DEBUG)"
-
-
 clean:
-	rm -f zyrln $(AAR_OUT)
+	rm -f zyrln $(AAR_OUT) $(DESKTOP_LINUX) $(DESKTOP_WIN) $(DESKTOP_MAC_ARM64) $(DESKTOP_MAC_AMD64)
 	cd android && ./gradlew clean 2>/dev/null || true

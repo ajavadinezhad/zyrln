@@ -19,6 +19,7 @@ tools/utls-frag-probe/
 /dist/
 
 # Android signing — never commit
+android/local.properties
 android/*.jks
 android/keystore.properties
 
@@ -37,6 +38,7 @@ android/build/
 
 # Internal files
 CLAUDE.md
+.claude/
 TODO.md
 .codex
 .agents

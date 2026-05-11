@@ -206,14 +206,19 @@ ufw allow 8787/tcp
 # باینری دسکتاپ
 make desktop
 
+# باینری‌های انتشار دسکتاپ برای لینوکس، ویندوز و مک
+make desktop-release
+
+# یا ساخت یک پلتفرم
+make desktop-linux
+make desktop-windows
+make desktop-macos
+
 # APK اندروید (نیاز به Android SDK و NDK)
 # یک بار اجرا کن — کلید امضا می‌سازد
 make keystore
 # APK نهایی می‌سازد
 make android
-
-# APK دیباگ (بدون keystore)
-make android-debug
 
 # اجرای پروکسی از سورس
 make proxy

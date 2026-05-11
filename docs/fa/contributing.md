@@ -80,7 +80,7 @@ go test ./...
 
 ```bash
 make desktop          # ساخت باینری ./zyrln
-make android-debug    # ساخت APK دیباگ (بدون keystore)
+make desktop-release  # ساخت باینری‌های دسکتاپ لینوکس، ویندوز و مک
 make android          # ساخت APK نهایی امضاشده (نیاز به keystore)
 ```
 

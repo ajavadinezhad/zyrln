@@ -83,9 +83,6 @@ gomobile init
 # Build
 make keystore        # generate signing key (once)
 make android         # signed release APK
-
-# Debug build (no keystore needed)
-make android-debug
 ```
 
 APK location: `android/app/build/outputs/apk/release/`

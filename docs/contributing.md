@@ -68,7 +68,7 @@ Tests use only the standard library, no external test frameworks.
 
 ```bash
 make desktop          # build ./zyrln CLI binary
-make android-debug    # build debug APK (no keystore needed)
+make desktop-release  # build Linux, Windows, and macOS desktop binaries
 make android          # build signed release APK (requires keystore)
 ```
 

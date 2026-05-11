@@ -183,12 +183,17 @@ Requires Go 1.25+.
 # Desktop binary + GUI
 make desktop
 
+# Desktop release binaries for Linux, Windows, and macOS
+make desktop-release
+
+# Or build one platform
+make desktop-linux
+make desktop-windows
+make desktop-macos
+
 # Android APK (requires Android SDK + NDK)
 make keystore       # run once — generates signing key
 make android        # builds signed release APK
-
-# Debug APK (no keystore needed)
-make android-debug
 
 # Start the proxy from source
 make proxy

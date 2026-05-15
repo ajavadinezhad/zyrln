@@ -52,3 +52,4 @@ zyrln-*
 !zyrln-logo.png
 !platforms/desktop/gui/zyrln-icon.png
 coverage.out
+direct_candidate.txt

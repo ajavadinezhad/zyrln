@@ -5,8 +5,8 @@ The Android app runs the relay proxy directly on your phone — no desktop neede
 ## Before You Start
 
 Complete the relay setup first:
-- [Apps Script deployed](../README.md#step-2--deploy-the-apps-script-relay)
-- [Exit relay running](../README.md#step-3--deploy-the-exit-relay) (VPS or Cloudflare)
+- [Exit relay running](../README.md#step-2--deploy-the-exit-relay) (VPS or Cloudflare)
+- [Apps Script deployed](../README.md#step-3--deploy-the-apps-script-relay)
 
 ## Install the App
 

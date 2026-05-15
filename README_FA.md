@@ -41,6 +41,19 @@
 
 1. برنامه را از صفحه [Releases](../../releases) دانلود کن
 2. اجرا کن — رابط گرافیکی خودبه‌خود در مرورگر باز می‌شود
+   - **macOS:** رابط گرافیکی به‌طور خودکار باز نمی‌شود؛ باید فلگ `-gui` را صریحاً پاس بدی:
+
+<div dir="ltr" align="left" style="direction: ltr; text-align: left;">
+
+```bash
+# macOS Apple Silicon
+./zyrln-VERSION-darwin-arm64 -gui
+# macOS Intel
+./zyrln-VERSION-darwin-amd64 -gui
+```
+
+</div>
+
 3. روی دکمه **⚡ برق** در نوار بالا کلیک کن تا حالت مستقیم فعال شود (سبز می‌شود)
 4. در مرورگرت پروکسی HTTP را روی `127.0.0.1:8085` تنظیم کن
 
@@ -164,6 +177,19 @@ ufw allow 8787/tcp
 
 1. باینری سیستم‌عاملت را از [Releases](../../releases) دانلود کن یا از سورس بیلد کن
 2. اجرا کن — رابط گرافیکی خودبه‌خود باز می‌شود
+   - **macOS:** رابط گرافیکی به‌طور خودکار باز نمی‌شود؛ باید فلگ `-gui` را صریحاً پاس بدی:
+
+<div dir="ltr" align="left" style="direction: ltr; text-align: left;">
+
+```bash
+# macOS Apple Silicon
+./zyrln-VERSION-darwin-arm64 -gui
+# macOS Intel
+./zyrln-VERSION-darwin-amd64 -gui
+```
+
+</div>
+
 3. روی **+** کلیک کن تا پروفایل جدید بسازی
 4. آدرس Apps Script و کلید امنیتی را وارد کن
 5. **Save** → **Connect**

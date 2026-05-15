@@ -42,6 +42,13 @@ Traffic is routed through Google Apps Script — a free Google service. From the
 
 1. Download the app for your platform from the [Releases](../../releases) page
 2. Run it — the GUI opens in your browser automatically
+   - **macOS:** the GUI does not open automatically; pass the `-gui` flag explicitly:
+     ```bash
+     # macOS Apple Silicon
+     ./zyrln-VERSION-darwin-arm64 -gui
+     # macOS Intel
+     ./zyrln-VERSION-darwin-amd64 -gui
+     ```
 3. Click the **⚡ lightning bolt** button in the top bar to enable Direct Mode
 4. Set your browser to use HTTP proxy `127.0.0.1:8085`
 
@@ -147,6 +154,13 @@ ufw allow 8787/tcp
 
 1. Download the binary for your OS from [Releases](../../releases), or build from source (see [Building from Source](#building-from-source))
 2. Run it — the GUI opens automatically
+   - **macOS:** the GUI does not open automatically; pass the `-gui` flag explicitly:
+     ```bash
+     # macOS Apple Silicon
+     ./zyrln-VERSION-darwin-arm64 -gui
+     # macOS Intel
+     ./zyrln-VERSION-darwin-amd64 -gui
+     ```
 3. Click **+** to add a new profile
 4. Paste your Apps Script URL and auth key
 5. Click **Save**, then click **Connect**

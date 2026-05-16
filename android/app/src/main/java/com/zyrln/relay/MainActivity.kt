@@ -225,9 +225,9 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        registerReceiver(startedReceiver, IntentFilter("com.zyrln.relay.STARTED"), RECEIVER_NOT_EXPORTED)
-        registerReceiver(stopReceiver, IntentFilter("com.zyrln.relay.STOPPED"), RECEIVER_NOT_EXPORTED)
-        registerReceiver(errorReceiver, IntentFilter(RelayVpnService.ACTION_ERROR), RECEIVER_NOT_EXPORTED)
+        androidx.core.content.ContextCompat.registerReceiver(this, startedReceiver, IntentFilter("com.zyrln.relay.STARTED"), androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED)
+        androidx.core.content.ContextCompat.registerReceiver(this, stopReceiver, IntentFilter("com.zyrln.relay.STOPPED"), androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED)
+        androidx.core.content.ContextCompat.registerReceiver(this, errorReceiver, IntentFilter(RelayVpnService.ACTION_ERROR), androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED)
         startLogPolling()
         if (Mobile.isRunning() && activeUrl == null) {
             val savedUrl = prefs.getString("url", null)

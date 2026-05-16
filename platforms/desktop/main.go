@@ -29,7 +29,7 @@ import (
 )
 
 const defaultProxyAddress = "direct"
-const appVersion = "1.5.1-pre8"
+const appVersion = "1.5.1-pre9"
 
 //go:embed gui/*
 var embeddedGUI embed.FS
@@ -1118,14 +1118,14 @@ func newGUIHandler(configPath, caCertPath, caKeyPath string, startProxy guiProxy
 		// Stop proxy if running — old CA in memory would cause signature mismatch
 		guiMu.Lock()
 		if guiProxyServer != nil {
+			if guiCoalescer != nil {
+				guiCoalescer.Stop()
+				guiCoalescer = nil
+			}
 			_ = guiProxyLn.Close()
 			_ = guiProxyServer.Close()
 			if guiSOCKSLn != nil {
 				_ = guiSOCKSLn.Close()
-			}
-			if guiCoalescer != nil {
-				guiCoalescer.Stop()
-				guiCoalescer = nil
 			}
 			guiProxyServer = nil
 			guiProxyLn = nil
@@ -1162,6 +1162,13 @@ func newGUIHandler(configPath, caCertPath, caKeyPath string, startProxy guiProxy
 		}
 		defer guiMu.Unlock()
 
+		var startReq struct {
+			DirectOnly bool `json:"directOnly"`
+		}
+		if r.Body != nil {
+			json.NewDecoder(r.Body).Decode(&startReq)
+		}
+
 		cfg := loadConfig(configPath)
 		urls := parseURLList(cfg["fronted-appscript-url"])
 		key := cfg["auth-key"]
@@ -1173,8 +1180,12 @@ func newGUIHandler(configPath, caCertPath, caKeyPath string, startProxy guiProxy
 		if socksListen == "" {
 			socksListen = "127.0.0.1:1080"
 		}
-		directOnly := len(urls) == 0 && core.GetDirectEnabled()
-		if len(urls) == 0 && !directOnly {
+		directOnly := startReq.DirectOnly || (len(urls) == 0 && core.GetDirectEnabled())
+		if directOnly {
+			urls = nil
+			key = ""
+		}
+		if !directOnly && len(urls) == 0 {
 			http.Error(w, "fronted-appscript-url is required", http.StatusBadRequest)
 			return
 		}
@@ -1219,14 +1230,14 @@ func newGUIHandler(configPath, caCertPath, caKeyPath string, startProxy guiProxy
 			w.WriteHeader(http.StatusOK)
 			return
 		}
+		if guiCoalescer != nil {
+			guiCoalescer.Stop()
+			guiCoalescer = nil
+		}
 		_ = guiProxyLn.Close()
 		_ = guiProxyServer.Close()
 		if guiSOCKSLn != nil {
 			_ = guiSOCKSLn.Close()
-		}
-		if guiCoalescer != nil {
-			guiCoalescer.Stop()
-			guiCoalescer = nil
 		}
 		guiProxyServer = nil
 		guiProxyLn = nil

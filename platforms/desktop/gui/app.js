@@ -634,10 +634,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         const endpoint = isRunning ? '/api/stop' : '/api/start';
+        const startOpts = (!isRunning && profileSelect.value === '__direct__')
+            ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ directOnly: true }) }
+            : { method: 'POST' };
 
         showProgress(isRunning ? t('progress.stopping') : t('progress.starting'));
         try {
-            const response = await fetch(endpoint, { method: 'POST' });
+            const response = await fetch(endpoint, isRunning ? { method: 'POST' } : startOpts);
             if (response.ok) {
                 playMotion(toggleProxyBtn, isRunning ? 'motion-soft' : 'motion-confirm');
                 updateStatus();

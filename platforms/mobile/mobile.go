@@ -2,7 +2,6 @@
 package mobile
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"net"
@@ -14,7 +13,6 @@ import (
 
 	"zyrln/relay/core"
 
-	"github.com/xjasonlyu/tun2socks/v2/engine"
 )
 
 func init() {
@@ -269,22 +267,21 @@ func Ping(appScriptURL, authKey string) string {
 }
 
 // Stop shuts down the relay proxy.
+// Uses Close instead of Shutdown to avoid blocking the Android main thread.
 func Stop() {
 	mu.Lock()
 	defer mu.Unlock()
+	if coalescer != nil {
+		coalescer.Stop()
+		coalescer = nil
+	}
 	if listener != nil {
 		_ = listener.Close()
 		listener = nil
 	}
 	if server != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_ = server.Shutdown(ctx)
+		_ = server.Close()
 		server = nil
-	}
-	if coalescer != nil {
-		coalescer.Stop()
-		coalescer = nil
 	}
 	emitLog("system", "Proxy stopped")
 }
@@ -309,24 +306,6 @@ func SetCacheDir(dir string) {
 	core.SetCacheDir(dir)
 }
 
-// StartTun starts a tun2socks engine that reads raw IP packets from tunFd and
-// forwards TCP/UDP through the local proxy at proxyAddr (e.g. "http://127.0.0.1:8085").
-// Call once after the VPN TUN interface is established.
-func StartTun(tunFd int, proxyAddr string) {
-	key := &engine.Key{
-		Device:     fmt.Sprintf("fd://%d", tunFd),
-		Proxy:      proxyAddr,
-		MTU:        1500,
-		UDPTimeout: time.Second,
-	}
-	engine.Insert(key)
-	engine.Start()
-}
-
-// StopTun stops the tun2socks engine.
-func StopTun() {
-	engine.Stop()
-}
 
 // SetDirectEnabled controls whether Google domains bypass the relay via TLS
 // fragmentation. Enabled by default. Safe to call at any time.

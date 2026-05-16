@@ -143,10 +143,7 @@ func dialDirect(ctx context.Context, addr, front string, cfg FragmentConfig, tim
 		cfg = DefaultFragmentConfig
 	}
 
-	var d net.Dialer
-	if timeout > 0 {
-		d.Timeout = timeout
-	}
+	d := protectedDialer(timeout)
 	start := time.Now()
 	raw, err := d.DialContext(ctx, "tcp", dialAddr)
 	if err != nil {

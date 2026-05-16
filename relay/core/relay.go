@@ -27,12 +27,33 @@ const maxRelayBody = 16 * 1024 * 1024
 // before the connection is established. On Android this should be wired to
 // VpnService.protect() so relay sockets bypass the TUN and don't loop back
 // through the local MITM proxy.
-var socketProtectFunc func(fd int)
+var socketProtectFuncVal atomic.Value // stores func(fd int)
 
 // SetSocketProtectFunc registers the per-socket protect callback.
 // Pass nil to clear it. Thread-safe.
 func SetSocketProtectFunc(fn func(fd int)) {
-	socketProtectFunc = fn
+	if fn == nil {
+		socketProtectFuncVal.Store((func(int))(nil))
+	} else {
+		socketProtectFuncVal.Store(fn)
+	}
+}
+
+// protectedDialer returns a net.Dialer whose Control hook calls the registered
+// socket protect function (VpnService.protect on Android). All outbound TCP
+// connections — relay AND direct — must use this to avoid looping back through
+// the VPN tunnel.
+func protectedDialer(timeout time.Duration) *net.Dialer {
+	return &net.Dialer{
+		Timeout:   timeout,
+		KeepAlive: 30 * time.Second,
+		Control: func(network, address string, c syscall.RawConn) error {
+			if fn, _ := socketProtectFuncVal.Load().(func(int)); fn != nil {
+				return c.Control(func(fd uintptr) { fn(int(fd)) })
+			}
+			return nil
+		},
+	}
 }
 
 // ParseURLList splits a comma-separated URL string and strips all whitespace
@@ -92,7 +113,7 @@ func NewHTTPClient(timeout time.Duration) *http.Client {
 		Timeout:   10 * time.Second,
 		KeepAlive: 30 * time.Second,
 		Control: func(network, address string, c syscall.RawConn) error {
-			if fn := socketProtectFunc; fn != nil {
+			if fn, _ := socketProtectFuncVal.Load().(func(int)); fn != nil {
 				return c.Control(func(fd uintptr) { fn(int(fd)) })
 			}
 			return nil
@@ -304,8 +325,17 @@ func (c *Coalescer) Submit(method, targetURL string, headers map[string]string, 
 		body:      body,
 		result:    make(chan coalescerResult, 1),
 	}
-	c.ch <- item
-	r := <-item.result
+	select {
+	case c.ch <- item:
+	case <-c.stopCh:
+		return RelayResponse{}, errors.New("proxy stopped")
+	}
+	var r coalescerResult
+	select {
+	case r = <-item.result:
+	case <-c.stopCh:
+		return RelayResponse{}, errors.New("proxy stopped")
+	}
 	if r.err != nil {
 		return r.resp, r.err
 	}

@@ -25,6 +25,10 @@
             </intent-filter>
         </activity>
 
+        <property
+            android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+            android:value="VPN proxy service for censorship circumvention" />
+
         <service
             android:name=".RelayVpnService"
             android:exported="false"

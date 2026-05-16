@@ -18,6 +18,31 @@ import (
 // OnRequest is an optional callback triggered for every proxied request.
 var OnRequest func(method, url string)
 
+// proxyMode is the operating mode determined once per request from directEnabled + relay availability.
+type proxyMode int
+
+const (
+	modeDisconnected proxyMode = iota // direct=off, no relay  → block all
+	modeDirect                        // direct=on,  no relay  → frag Google, pipe others
+	modeRelay                         // direct=off, relay=on  → MITM+relay all
+	modeDirectRelay                   // direct=on,  relay=on  → frag Google, MITM+relay others
+)
+
+func currentMode(coal *Coalescer, ca *CertAuthority) proxyMode {
+	direct := GetDirectEnabled()
+	relay := coal != nil && ca != nil
+	switch {
+	case direct && relay:
+		return modeDirectRelay
+	case direct:
+		return modeDirect
+	case relay:
+		return modeRelay
+	default:
+		return modeDisconnected
+	}
+}
+
 // logFuncPtr holds the current LogFunc via atomic pointer to avoid data races.
 var logFuncPtr atomic.Pointer[func(level, msg string)]
 
@@ -182,14 +207,14 @@ func buildHTTPProxyServer(listenAddr string, coal *Coalescer, ca *CertAuthority)
 			if r.Method == http.MethodConnect {
 				handleConnect(w, r, coal, ca)
 			} else {
-				handleHTTP(w, r, coal)
+				handleHTTP(w, r, coal, ca)
 			}
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 }
 
-func handleHTTP(w http.ResponseWriter, r *http.Request, coal *Coalescer) {
+func handleHTTP(w http.ResponseWriter, r *http.Request, coal *Coalescer, ca *CertAuthority) {
 	targetURL := r.URL.String()
 	if !r.URL.IsAbs() {
 		scheme := "http"
@@ -206,10 +231,17 @@ func handleHTTP(w http.ResponseWriter, r *http.Request, coal *Coalescer) {
 	}
 	defer r.Body.Close()
 
-	if coal == nil {
-		http.Error(w, "relay not configured", http.StatusBadGateway)
+	switch currentMode(coal, ca) {
+	case modeDisconnected:
+		http.Error(w, "no proxy configured", http.StatusBadGateway)
 		return
+	case modeDirect:
+		directHTTP(w, r, targetURL, body)
+		return
+	case modeRelay, modeDirectRelay:
+		// relay below
 	}
+
 	relayResp, err := coal.Submit(r.Method, targetURL, forwardHeaders(r.Header), body)
 	if err != nil {
 		http.Error(w, "relay failed: "+err.Error(), http.StatusBadGateway)
@@ -227,6 +259,40 @@ func handleHTTP(w http.ResponseWriter, r *http.Request, coal *Coalescer) {
 	w.WriteHeader(relayResp.Status)
 	_, _ = w.Write(relayResp.Body)
 	logf("info", "%s %s → %d %s", r.Method, targetURL, relayResp.Status, fmtBytes(len(relayResp.Body)))
+}
+
+// directHTTP forwards a plain HTTP request directly to the target (no relay).
+// Used in direct-only mode so non-Google HTTP traffic isn't blocked.
+func directHTTP(w http.ResponseWriter, r *http.Request, targetURL string, body []byte) {
+	req, err := http.NewRequest(r.Method, targetURL, bytes.NewReader(body))
+	if err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	for k, vs := range r.Header {
+		if !skipRequestHeader(k) {
+			for _, v := range vs {
+				req.Header.Add(k, v)
+			}
+		}
+	}
+	transport := &http.Transport{
+		DialContext:     protectedDialer(15 * time.Second).DialContext,
+		IdleConnTimeout: 30 * time.Second,
+	}
+	resp, err := transport.RoundTrip(req)
+	if err != nil {
+		http.Error(w, "direct failed: "+err.Error(), http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+	for k, vs := range resp.Header {
+		for _, v := range vs {
+			w.Header().Add(k, v)
+		}
+	}
+	w.WriteHeader(resp.StatusCode)
+	_, _ = io.Copy(w, resp.Body)
 }
 
 func handleConnect(w http.ResponseWriter, r *http.Request, coal *Coalescer, ca *CertAuthority) {
@@ -252,13 +318,15 @@ func handleConnect(w http.ResponseWriter, r *http.Request, coal *Coalescer, ca *
 		return
 	}
 
-	// Google domains: always pipe directly — never MITM (Chrome rejects user CAs).
-	// Use fragmentation when direct mode is on, plain dial otherwise.
-	if IsGoogleDomain(certHost) {
-		if GetDirectEnabled() {
+	switch currentMode(coal, ca) {
+	case modeDisconnected:
+		_, _ = rawConn.Write([]byte("HTTP/1.1 502 No proxy configured\r\n\r\n"))
+		return
+	case modeDirect:
+		if IsGoogleDomain(certHost) {
 			handleDirectConnect(rawConn, r.Host)
 		} else {
-			serverConn, err := net.DialTimeout("tcp", r.Host, 15*time.Second)
+			serverConn, err := protectedDialer(15 * time.Second).DialContext(r.Context(), "tcp", r.Host)
 			if err != nil {
 				_, _ = rawConn.Write([]byte("HTTP/1.1 502 Bad Gateway\r\n\r\n"))
 				return
@@ -268,11 +336,14 @@ func handleConnect(w http.ResponseWriter, r *http.Request, coal *Coalescer, ca *
 			pipe(rawConn, serverConn)
 		}
 		return
-	}
-
-	if ca == nil {
-		rawConn.Write([]byte("HTTP/1.1 502 No CA configured\r\n\r\n"))
-		return
+	case modeDirectRelay:
+		if IsGoogleDomain(certHost) {
+			handleDirectConnect(rawConn, r.Host)
+			return
+		}
+		// non-Google: fall through to MITM+relay
+	case modeRelay:
+		// fall through to MITM+relay
 	}
 
 	_, _ = rawConn.Write([]byte("HTTP/1.1 200 Connection Established\r\n\r\n"))
@@ -322,10 +393,6 @@ func handleMITMTLS(tlsConn net.Conn, certHost, targetHost string, coal *Coalesce
 		}
 
 		targetURL := "https://" + targetHost + req.URL.RequestURI()
-		if coal == nil {
-			_, _ = tlsConn.Write([]byte("HTTP/1.1 502 Relay not configured\r\nConnection: close\r\n\r\n"))
-			return
-		}
 		relayResp, err := coal.Submit(req.Method, targetURL, forwardHeaders(req.Header), body)
 		if err != nil {
 			writeHTTPError(tlsConn, http.StatusBadGateway, "relay failed: "+err.Error())
@@ -416,11 +483,12 @@ func (s *SOCKSServer) handleConn(conn net.Conn) {
 			return
 		}
 
-		// Google domains: always pipe directly — never MITM (Chrome rejects user CAs).
-		// Use fragmentation when direct mode is on, plain dial otherwise.
-		if IsGoogleDomain(certHost) {
+		switch currentMode(s.coal, s.ca) {
+		case modeDisconnected:
+			return
+		case modeDirect:
 			var serverConn net.Conn
-			if GetDirectEnabled() {
+			if IsGoogleDomain(certHost) {
 				var ok bool
 				serverConn, ok = DialFragment(targetHost)
 				if !ok {
@@ -436,11 +504,21 @@ func (s *SOCKSServer) handleConn(conn net.Conn) {
 			defer serverConn.Close()
 			pipe(&bufferedConn{Conn: conn, reader: reader}, serverConn)
 			return
+		case modeDirectRelay:
+			if IsGoogleDomain(certHost) {
+				serverConn, ok := DialFragment(targetHost)
+				if !ok {
+					return
+				}
+				defer serverConn.Close()
+				pipe(&bufferedConn{Conn: conn, reader: reader}, serverConn)
+				return
+			}
+			// non-Google: fall through to MITM+relay
+		case modeRelay:
+			// fall through to MITM+relay
 		}
 
-		if s.ca == nil {
-			return
-		}
 		cert, err := s.ca.CertForHost(certHost)
 		if err != nil {
 			logf("error", "SOCKS TLS cert %s: %v", certHost, err)
@@ -459,7 +537,7 @@ func (s *SOCKSServer) handleConn(conn net.Conn) {
 		return
 	}
 
-	handleSOCKSHTTP(&bufferedConn{Conn: conn, reader: reader}, targetHost, s.coal)
+	handleSOCKSHTTP(&bufferedConn{Conn: conn, reader: reader}, targetHost, currentMode(s.coal, s.ca), s.coal)
 }
 
 func (s *SOCKSServer) handshake(reader *bufio.Reader, conn net.Conn) (string, error) {
@@ -574,8 +652,26 @@ func isLikelyTLS(reader *bufio.Reader) bool {
 	return peek[0] == 0x16
 }
 
-func handleSOCKSHTTP(conn net.Conn, targetHost string, coal *Coalescer) {
+func handleSOCKSHTTP(conn net.Conn, targetHost string, mode proxyMode, coal *Coalescer) {
 	defer conn.Close()
+
+	switch mode {
+	case modeDisconnected:
+		writeHTTPError(conn, http.StatusBadGateway, "no proxy configured")
+		return
+	case modeDirect:
+		serverConn, err := net.DialTimeout("tcp", targetHost, 15*time.Second)
+		if err != nil {
+			writeHTTPError(conn, http.StatusBadGateway, "direct failed: "+err.Error())
+			return
+		}
+		defer serverConn.Close()
+		pipe(conn, serverConn)
+		return
+	case modeRelay, modeDirectRelay:
+		// relay below
+	}
+
 	reader := bufio.NewReader(conn)
 	for {
 		req, err := http.ReadRequest(reader)
@@ -605,10 +701,6 @@ func handleSOCKSHTTP(conn net.Conn, targetHost string, coal *Coalescer) {
 		}
 
 		targetURL := "http://" + host + req.URL.RequestURI()
-		if coal == nil {
-			writeHTTPError(conn, http.StatusBadGateway, "relay not configured")
-			return
-		}
 		relayResp, err := coal.Submit(req.Method, targetURL, forwardHeaders(req.Header), body)
 		if err != nil {
 			writeHTTPError(conn, http.StatusBadGateway, "relay failed: "+err.Error())

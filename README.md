@@ -9,7 +9,7 @@ Bypass internet censorship in Iran. Routes your traffic through Google's infrast
 ## Table of Contents
 
 - [How It Works](#how-it-works)
-- [I just want YouTube and Google](#i-just-want-youtube-and-google)
+- [I just want Google services (Gmail, Drive, Maps)](#i-just-want-google-services-gmail-drive-maps)
 - [I want to access everything](#i-want-to-access-everything)
   - [What you need](#what-you-need)
   - [Step 1 — Run the desktop app](#step-1--run-the-desktop-app)
@@ -28,7 +28,7 @@ Bypass internet censorship in Iran. Routes your traffic through Google's infrast
 
 Iran's censorship system (SNDPI) blocks sites by inspecting traffic. Zyrln defeats it two ways:
 
-**For Google services (YouTube, Gmail, Drive, etc.):**
+**For Google services (Gmail, Drive, Maps, etc.):**
 Traffic is sent directly to Google but with the TLS handshake split into tiny fragments. The censor's system can't reassemble them fast enough to read the SNI, so it lets the connection through. No server needed.
 
 **For everything else (Instagram, Twitter, etc.):**
@@ -36,7 +36,7 @@ Traffic is routed through Google Apps Script — a free Google service. From the
 
 ---
 
-## I just want YouTube and Google
+## I just want Google services (Gmail, Drive, Maps)
 
 **No server needed. No setup. Just download and enable.**
 
@@ -57,7 +57,7 @@ Traffic is routed through Google Apps Script — a free Google service. From the
 
 That's it. Many Google services can use the faster direct path when the local network allows it.
 
-> Direct Mode targets SNI-based filtering on Google services. Zyrln fragments the TLS handshake so basic DPI paths may fail to read the requested Google hostname in time. Filtering varies by ISP, city, carrier, and time.
+> Direct Mode works for Google services that are SNI-filtered but not IP-blocked — Gmail, Drive, Maps, Google Docs, and similar. YouTube video streaming and Play Store downloads go through the relay instead. Filtering behavior varies by ISP, city, carrier, and time.
 
 ---
 

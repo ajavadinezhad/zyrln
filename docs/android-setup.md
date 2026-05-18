@@ -10,6 +10,8 @@ Complete the relay setup first:
 
 ## Install the App
 
+Requires Android 9 (API 29) or higher.
+
 Download the APK from the [Releases](../../releases) page and install it on your phone.
 
 If Android blocks the install: **Settings → Install unknown apps** → allow your file manager.
@@ -63,7 +65,7 @@ To disconnect: tap the connect button again.
 
 ## Direct Mode (Google Services)
 
-The **⚡ lightning bolt** button enables direct mode — Google services (YouTube, Gmail, Drive) connect directly to Google with fragmented TLS instead of going through the relay. Faster and uses less quota.
+The **⚡ lightning bolt** button enables direct mode — Google services (Gmail, Drive, Maps, Docs) connect directly to Google with fragmented TLS instead of going through the relay. Faster and uses less quota. YouTube video streaming and Play Store downloads still go through the relay.
 
 Enable it by tapping the lightning bolt (it turns green). Works independently from the relay — you can have both active at once.
 

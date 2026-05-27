@@ -161,9 +161,6 @@ const EXIT_RELAY_KEY  = "";
 
 ### Step 5 — Set up Android
 
-See **[docs/android-setup.md](docs/android-setup.md)** for the full guide.
-
-Quick steps:
 1. Install the APK from [Releases](../../releases)
 2. In the desktop app: click the **export** button → copy the JSON
 3. In the Android app: tap **Import Config from Clipboard**

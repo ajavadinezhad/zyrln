@@ -182,8 +182,6 @@ const EXIT_RELAY_KEY  = "";
 
 ### مرحله ۵ — راه‌اندازی اندروید
 
-راهنمای کامل: **[docs/fa/android-setup.md](docs/fa/android-setup.md)**
-
 خلاصه:
 1. APK را از [Releases](../../releases) نصب کن
 2. در برنامه دسکتاپ روی دکمه **export** کلیک کن → JSON را کپی کن

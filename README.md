@@ -119,7 +119,7 @@ This is the exit node that fetches real websites. Pick one option:
 
 Linux VPS (amd64 or arm64), public IP, port **8787** open, SSH as `user@host` with `sudo`. On your laptop you only need `ssh`/`scp` (no Go).
 
-1. Download **`zyrln-vps-install-VERSION.zip`** from [Releases](../../releases) and unzip it.
+1. Download **`zyrln-VERSION-vps.zip`** from [Releases](../../releases) and unzip it.
 2. In the unzipped folder, run `./install-vps-relay.sh user@YOUR_VPS_IP` (e.g. `ubuntu@1.2.3.4`).  
    Optional shared secret: `ZYRLN_RELAY_KEY=secret` or `ZYRLN_RELAY_KEY=auto` before the command — use the same value for `EXIT_RELAY_KEY` in Apps Script.
 3. In `Code.gs`: `EXIT_RELAY_URL = "http://YOUR_VPS_IP:8787/relay"` and `EXIT_RELAY_KEY` if you set one.
@@ -161,6 +161,7 @@ const EXIT_RELAY_KEY  = "";
 
 ### Step 5 — Set up Android
 
+Quick steps:
 1. Install the APK from [Releases](../../releases)
 2. In the desktop app: click the **export** button → copy the JSON
 3. In the Android app: tap **Import Config from Clipboard**
@@ -195,7 +196,7 @@ make proxy
 make test
 
 # VPS install zip (installer + linux amd64/arm64 binaries)
-make vps-relay-bundle   # → dist/zyrln-vps-install-VERSION.zip
+make vps-relay-bundle   # → dist/zyrln-VERSION-vps.zip
 ```
 
 `make desktop` builds a local `./zyrln` binary for your current machine. `make desktop-release` writes platform-specific binaries into `dist/` using the release names shown above.

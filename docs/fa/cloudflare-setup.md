@@ -17,7 +17,8 @@ wrangler login            # یک بار
 قبل از دیپلوی:
 
 1. **`worker.js`** — `WORKER_HOST = "your-worker.subdomain.workers.dev"` (بدون `https://`)
-2. **`wrangler.toml`** — `name = "نام-worker-در-داشبورد"`
+2. **`wrangler.toml`** — `name` و `ZYRLN_RELAY_KEY` (یک رشته تصادفی)
+3. **`Code.gs`** — همان مقدار به‌عنوان `EXIT_RELAY_KEY`
 
 <div dir="ltr" align="left" style="direction: ltr; text-align: left;">
 
@@ -34,35 +35,56 @@ wrangler deploy
 <div dir="ltr" align="left" style="direction: ltr; text-align: left;">
 
 ```js
-const EXIT_RELAY_URL = "https://your-worker.workers.dev";
-const EXIT_TUNNEL_URL = "";
-const EXIT_RELAY_KEY = "";
+const AUTH_KEY        = "your-key-matching-zyrln-auth-key";
+const EXIT_RELAY_URL  = "https://your-worker.workers.dev";  // بدون /relay
+const EXIT_TUNNEL_URL = "";   // خالی — Apps Script خودش /tunnel می‌سازد
+const EXIT_RELAY_KEY  = "your-exit-key";   // همان ZYRLN_RELAY_KEY
 ```
 
 </div>
 
-Apps Script را دوباره دیپلوی کن.
+## کلید خروجی (همان VPS)
 
-## تست
+| کجا | تنظیم |
+|-----|--------|
+| Apps Script | `EXIT_RELAY_KEY` |
+| Cloudflare `wrangler.toml` | `ZYRLN_RELAY_KEY` |
+| VPS | `ZYRLN_RELAY_KEY` |
+
+<div dir="ltr" align="left" style="direction: ltr; text-align: left;">
+
+```toml
+[vars]
+ZYRLN_RELAY_KEY = "your-exit-key"
+```
+
+```js
+const EXIT_RELAY_KEY = "your-exit-key";
+```
+
+</div>
+
+<div dir="rtl">
+
+Apps Script: **Deploy → Manage deployments → New version**. Worker: `wrangler deploy`.
+
+</div>
 
 <div dir="ltr" align="left" style="direction: ltr; text-align: left;">
 
 ```bash
 curl -s -X POST "https://your-worker.workers.dev/tunnel" \
   -H "Content-Type: application/json" \
+  -H "X-Relay-Key: your-exit-key" \
   -d '{"op":"open","id":"test-1","target":"149.154.167.92:443"}'
 ```
 
 </div>
 
-پاسخ: `{"ok":true}`. خطای `missing TUNNEL_HUB binding` → دوباره `wrangler deploy`.
+<div dir="rtl">
 
-## Worker در برابر VPS
+پاسخ: `{"ok":true}`.
 
-| | Worker | VPS |
-|---|---|---|
-| تونل اندروید / تلگرام | بله | بله |
-| سایت‌های روی IP Cloudflare | خیر | بله |
-| CAPTCHA / IP ثابت | خیر | بله |
+</div>
 
 فایل‌ها: [`worker.js`](../../relay/deploy/cloudflare/worker.js)، [`wrangler.toml`](../../relay/deploy/cloudflare/wrangler.toml).

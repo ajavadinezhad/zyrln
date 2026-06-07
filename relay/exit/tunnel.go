@@ -62,7 +62,7 @@ func handleTunnel(w http.ResponseWriter, r *http.Request, hub *tunnelHub, key st
 		writeTunnelJSON(w, http.StatusMethodNotAllowed, tunnelResponse{Error: "POST required"})
 		return
 	}
-	if key != "" && r.Header.Get("X-Relay-Key") != key {
+	if strings.TrimSpace(key) != "" && r.Header.Get("X-Relay-Key") != key {
 		writeTunnelJSON(w, http.StatusUnauthorized, tunnelResponse{Error: "unauthorized"})
 		return
 	}

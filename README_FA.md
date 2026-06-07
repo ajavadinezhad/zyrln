@@ -128,8 +128,8 @@
 VPS لینوکس (amd64 یا arm64)، IP عمومی، پورت **۸۷۸۷** باز، SSH با `user@host` و `sudo`. روی لپ‌تاپ فقط `ssh`/`scp` (بدون Go).
 
 1. **`zyrln-VERSION-vps.zip`** را از [Releases](../../releases) بگیر و از حالت فشرده خارج کن.
-2. در همان پوشه: `./install-vps-relay.sh user@IP_VPS` — اختیاری: `ZYRLN_RELAY_KEY=secret` یا `auto` (همان `EXIT_RELAY_KEY` در Apps Script).
-3. در `Code.gs`: `EXIT_RELAY_URL = "http://IP_VPS:8787/relay"` و در صورت نیاز `EXIT_RELAY_KEY`.
+2. در همان پوشه: `./install-vps-relay.sh user@IP_VPS` — `ZYRLN_RELAY_KEY=secret` یا `ZYRLN_RELAY_KEY=auto` (همان `EXIT_RELAY_KEY` در Apps Script).
+3. در `Code.gs`: `EXIT_RELAY_URL = "http://IP_VPS:8787/relay"` و `EXIT_RELAY_KEY` مطابق VPS.
 
 تست: `curl -s http://IP_VPS:8787/healthz` باید `ok` چاپ کند.
 
@@ -137,9 +137,38 @@ VPS لینوکس (amd64 یا arm64)، IP عمومی، پورت **۸۷۸۷** با
 
 این درب ورودی است. روی سرورهای گوگل اجرا می‌شود و ترافیک تو را دریافت می‌کند.
 
+#### دو کلید
+
+دقیقاً **دو کلید** داری. اپ فقط کلید اول را می‌خواهد.
+
+| | کلید ۱ — کلاینت | کلید ۲ — exit |
+|---|----------------|---------------|
+| **مسیر** | اپ → Apps Script | Apps Script → VPS یا Cloudflare |
+| **در اپ** | بله (`auth-key`) | خیر |
+| **Apps Script** | `AUTH_KEY` | `EXIT_RELAY_KEY` |
+| **Exit** | — | `ZYRLN_RELAY_KEY` |
+| **روی سیم** | JSON `"k"` | هدر `X-Relay-Key` |
+
+کلید ۲ روی VPS و Cloudflare **همان نام** دارد (`ZYRLN_RELAY_KEY`). همان مقدار در `EXIT_RELAY_KEY` (Code.gs) و `ZYRLN_RELAY_KEY` (exit).
+
 1. به [script.google.com](https://script.google.com) برو → **پروژه جدید**
 2. کد پیش‌فرض را پاک کن و محتوای فایل [`relay/deploy/apps-script/Code.gs`](relay/deploy/apps-script/Code.gs) را جای‌گذاری کن
-3. سه خط اول را ویرایش کن:
+3. ثابت‌های بالای فایل را ویرایش کن — **Cloudflare** یا **VPS**، نه هر دو:
+
+**Cloudflare Worker**:
+
+<div dir="ltr" align="left" style="direction: ltr; text-align: left;">
+
+```js
+const AUTH_KEY        = "your-key-from-step-1";
+const EXIT_RELAY_URL  = "https://your-worker.your-subdomain.workers.dev";  // بدون /relay
+const EXIT_TUNNEL_URL = "";   // خالی — Apps Script خودش /tunnel می‌سازد
+const EXIT_RELAY_KEY  = "your-exit-key";   // همان ZYRLN_RELAY_KEY در wrangler.toml
+```
+
+</div>
+
+**VPS**:
 
 <div dir="ltr" align="left" style="direction: ltr; text-align: left;">
 
@@ -147,15 +176,14 @@ VPS لینوکس (amd64 یا arm64)، IP عمومی، پورت **۸۷۸۷** با
 const AUTH_KEY        = "your-key-from-step-1";
 const EXIT_RELAY_URL  = "http://YOUR_VPS_IP:8787/relay";
 const EXIT_TUNNEL_URL = "http://YOUR_VPS_IP:8787/tunnel";
-const EXIT_RELAY_KEY  = "";
+const EXIT_RELAY_KEY  = "your-exit-key";   // همان ZYRLN_RELAY_KEY روی VPS
 ```
 
 </div>
 
 <div dir="rtl">
 
-- اگر از **Cloudflare Worker** استفاده می‌کنی: `EXIT_RELAY_URL` = آدرس Worker؛ `EXIT_TUNNEL_URL` خالی (Apps Script خودش `/tunnel` می‌سازد)
-- اگر از VPS استفاده می‌کنی: **EXIT_RELAY_KEY** را پر کن؛ برای Cloudflare خالی مگر `RELAY_KEY` در wrangler.toml
+جزئیات دیپلوی Wrangler: [راه‌اندازی Cloudflare Worker](docs/fa/cloudflare-setup.md).
 
 </div>
 

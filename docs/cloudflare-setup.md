@@ -2,6 +2,17 @@
 
 Free exit alternative to a VPS. One Worker handles **HTTP relay** (desktop) and **TCP tunnel** (Android). Deploy with Wrangler only — it uploads the code and registers the `TUNNEL_HUB` Durable Object binding Android needs.
 
+## Two keys
+
+| | Key 1 — client | Key 2 — exit |
+|---|----------------|--------------|
+| **Path** | App → Apps Script | Apps Script → Worker |
+| **In the app** | Yes (`auth-key`) | No |
+| **Apps Script** | `AUTH_KEY` | `EXIT_RELAY_KEY` |
+| **Cloudflare** | — | `ZYRLN_RELAY_KEY` in `wrangler.toml` |
+
+Key 2 is the **same key VPS uses** (`ZYRLN_RELAY_KEY`). Same value in Code.gs and wrangler.
+
 ## Deploy
 
 ```bash
@@ -13,7 +24,22 @@ wrangler login            # once
 Edit before deploy:
 
 1. **`worker.js`** — `WORKER_HOST = "your-worker.your-subdomain.workers.dev"` (hostname only, no `https://`)
-2. **`wrangler.toml`** — `name = "your-worker-name"` (same name as in the Cloudflare dashboard)
+2. **`wrangler.toml`** — `name` and `ZYRLN_RELAY_KEY` (key 2)
+3. **`Code.gs`** — `AUTH_KEY` (key 1), `EXIT_RELAY_URL`, `EXIT_RELAY_KEY` (key 2, same value)
+
+```toml
+# wrangler.toml
+[vars]
+ZYRLN_RELAY_KEY = "your-exit-key"
+```
+
+```js
+// Code.gs
+const AUTH_KEY        = "your-app-key";
+const EXIT_RELAY_URL  = "https://your-worker.workers.dev";  // no /relay
+const EXIT_TUNNEL_URL = "";
+const EXIT_RELAY_KEY  = "your-exit-key";
+```
 
 ```bash
 wrangler deploy
@@ -21,35 +47,16 @@ wrangler deploy
 
 Confirm output includes `env.TUNNEL_HUB (TunnelHub)` and your `*.workers.dev` URL.
 
-To update later: same `wrangler deploy` from this folder.
-
-## Apps Script
-
-In [`relay/deploy/apps-script/Code.gs`](../relay/deploy/apps-script/Code.gs):
-
-```js
-const EXIT_RELAY_URL = "https://your-worker.your-subdomain.workers.dev";
-const EXIT_TUNNEL_URL = "";   // empty → same host + /tunnel
-const EXIT_RELAY_KEY = "";    // empty unless RELAY_KEY is set in wrangler.toml
-```
-
-Redeploy Apps Script: **Deploy → Manage deployments → New version**.
-
-Optional split exit (Worker relay + VPS tunnel):
-
-```js
-const EXIT_TUNNEL_URL = "http://YOUR_VPS_IP:8787/tunnel";
-```
-
 ## Verify
 
 ```bash
 curl -s -X POST "https://your-worker.workers.dev/tunnel" \
   -H "Content-Type: application/json" \
+  -H "X-Relay-Key: your-exit-key" \
   -d '{"op":"open","id":"test-1","target":"149.154.167.92:443"}'
 ```
 
-Expect `{"ok":true}`. If you see `missing TUNNEL_HUB binding`, run `wrangler deploy` again from `relay/deploy/cloudflare/`.
+Expect `{"ok":true}`. If you see `missing TUNNEL_HUB binding`, run `wrangler deploy` again.
 
 ## Worker vs VPS
 
@@ -58,9 +65,7 @@ Expect `{"ok":true}`. If you see `missing TUNNEL_HUB binding`, run `wrangler dep
 | Cost | Free tier | ~$5/mo |
 | Android tunnel / Telegram | Yes | Yes |
 | Desktop HTTP relay | Yes | Yes |
-| Sites on Cloudflare IPs (e.g. ChatGPT) | No — Workers block outbound TCP to CF ranges | Yes |
-| CAPTCHAs / fixed IP | No / No | Yes / Yes |
-
-Free tier: ~100k requests/day; tunnel polls use Durable Object time. Heavy use → second Worker account or VPS.
+| Key 2 name | `ZYRLN_RELAY_KEY` | `ZYRLN_RELAY_KEY` |
+| Sites on Cloudflare IPs (e.g. ChatGPT) | No | Yes |
 
 Files: [`worker.js`](../relay/deploy/cloudflare/worker.js), [`wrangler.toml`](../relay/deploy/cloudflare/wrangler.toml).

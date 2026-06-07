@@ -36,7 +36,7 @@ type relayResponse struct {
 
 func main() {
 	listen := flag.String("listen", envDefault("ZYRLN_RELAY_LISTEN", "127.0.0.1:8787"), "listen address")
-	key := flag.String("key", os.Getenv("ZYRLN_RELAY_KEY"), "optional relay key required in X-Relay-Key")
+	key := flag.String("key", os.Getenv("ZYRLN_RELAY_KEY"), "exit relay key (X-Relay-Key header from Apps Script)")
 	timeout := flag.Duration("timeout", 45*time.Second, "target request timeout")
 	flag.Parse()
 
@@ -73,8 +73,8 @@ func main() {
 	}
 
 	log.Printf("zyrln relay listening on http://%s (/relay + /tunnel)", *listen)
-	if *key == "" {
-		log.Printf("warning: ZYRLN_RELAY_KEY is empty; /relay and /tunnel are not protected")
+	if strings.TrimSpace(*key) == "" {
+		log.Printf("warning: ZYRLN_RELAY_KEY is empty; /relay and /tunnel accept any caller")
 	}
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
@@ -86,7 +86,7 @@ func handleRelay(w http.ResponseWriter, r *http.Request, client *http.Client, ke
 		writeJSON(w, http.StatusMethodNotAllowed, relayResponse{Error: "POST required"})
 		return
 	}
-	if key != "" && r.Header.Get("X-Relay-Key") != key {
+	if strings.TrimSpace(key) != "" && r.Header.Get("X-Relay-Key") != key {
 		writeJSON(w, http.StatusUnauthorized, relayResponse{Error: "unauthorized"})
 		return
 	}

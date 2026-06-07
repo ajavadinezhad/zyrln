@@ -243,7 +243,6 @@ install_remote() {
 	scp -q "$tmpbin" "${host}:/tmp/${BIN_NAME}"
 
 	log "configuring ${host} (sudo used if SSH user is not root)"
-	# OpenSSH drops empty arguments; use "-" when relay key is unset.
 	local relay_key_arg="-"
 	[[ -n "$relay_key" ]] && relay_key_arg=$relay_key
 	ssh -t "$host" "bash -s" -- "$relay_key_arg" "$PORT" "$UFW" <<'REMOTE'

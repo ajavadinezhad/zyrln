@@ -118,8 +118,8 @@ Linux VPS (amd64 or arm64), public IP, port **8787** open, SSH as `user@host` wi
 
 1. Download **`zyrln-VERSION-vps.zip`** from [Releases](../../releases) and unzip it.
 2. In the unzipped folder, run `./install-vps-relay.sh user@YOUR_VPS_IP` (e.g. `ubuntu@1.2.3.4`).  
-   Optional shared secret: `ZYRLN_RELAY_KEY=secret` or `ZYRLN_RELAY_KEY=auto` before the command — use the same value for `EXIT_RELAY_KEY` in Apps Script.
-3. In `Code.gs`: `EXIT_RELAY_URL = "http://YOUR_VPS_IP:8787/relay"` and `EXIT_RELAY_KEY` if you set one.
+   Shared secret: `ZYRLN_RELAY_KEY=secret` or `ZYRLN_RELAY_KEY=auto` — same value as `EXIT_RELAY_KEY` (key 2) in Apps Script.
+3. In `Code.gs`: `EXIT_RELAY_URL = "http://YOUR_VPS_IP:8787/relay"` and `EXIT_RELAY_KEY` matching the VPS.
 
 Check: `curl -s http://YOUR_VPS_IP:8787/healthz` should print `ok`.
 
@@ -127,19 +127,47 @@ Check: `curl -s http://YOUR_VPS_IP:8787/healthz` should print `ok`.
 
 This is the front door. It sits on Google's servers and receives your traffic.
 
-1. Go to [script.google.com](https://script.google.com) → **New project**
-2. Delete the default code and paste the contents of [`relay/deploy/apps-script/Code.gs`](relay/deploy/apps-script/Code.gs)
-3. Edit the three lines at the top:
+#### Two keys
 
-```js
-const AUTH_KEY        = "your-key-from-step-1";
-const EXIT_RELAY_URL  = "http://YOUR_VPS_IP:8787/relay";
-const EXIT_TUNNEL_URL = "http://YOUR_VPS_IP:8787/tunnel";
-const EXIT_RELAY_KEY  = "";
+There are exactly **two keys**. The app only uses the first.
+
+| | Key 1 — client | Key 2 — exit |
+|---|----------------|--------------|
+| **Path** | App → Apps Script | Apps Script → VPS or Cloudflare |
+| **In the app** | Yes (`auth-key`) | No |
+| **Apps Script** | `AUTH_KEY` | `EXIT_RELAY_KEY` |
+| **Exit (VPS or Cloudflare)** | — | `ZYRLN_RELAY_KEY` |
+| **On the wire** | JSON `"k"` | HTTP header `X-Relay-Key` |
+
+Key 2 uses the **same name** on VPS and Cloudflare Worker (`ZYRLN_RELAY_KEY`). Set the **same value** in `EXIT_RELAY_KEY` (Code.gs) and `ZYRLN_RELAY_KEY` (exit). If the exit has no key configured, leave `EXIT_RELAY_KEY` empty in Code.gs.
+
+```
+App ──key 1──► Apps Script ──key 2──► Cloudflare or VPS
 ```
 
-- If using **Cloudflare Worker**: set `EXIT_RELAY_URL` to the Worker URL; leave `EXIT_TUNNEL_URL` empty (Apps Script uses `/tunnel` on the same host)
-- If using **VPS**: fill `EXIT_RELAY_KEY` with your relay key; leave empty for Cloudflare unless you set `RELAY_KEY` in `wrangler.toml`
+1. Go to [script.google.com](https://script.google.com) → **New project**
+2. Delete the default code and paste the contents of [`relay/deploy/apps-script/Code.gs`](relay/deploy/apps-script/Code.gs)
+3. Edit the constants at the top — use the **Cloudflare** or **VPS** block, not both:
+
+**Cloudflare Worker**:
+
+```js
+const AUTH_KEY        = "your-key-from-step-1";          // key 1 — goes in the app
+const EXIT_RELAY_URL  = "https://your-worker.your-subdomain.workers.dev";  // no /relay
+const EXIT_TUNNEL_URL = "";                             // Cloudflare: empty (auto /tunnel)
+const EXIT_RELAY_KEY  = "your-exit-key";                 // key 2 — same as ZYRLN_RELAY_KEY in wrangler.toml
+```
+
+**VPS**:
+
+```js
+const AUTH_KEY        = "your-key-from-step-1";          // key 1 — goes in the app
+const EXIT_RELAY_URL  = "http://YOUR_VPS_IP:8787/relay";
+const EXIT_TUNNEL_URL = "http://YOUR_VPS_IP:8787/tunnel";
+const EXIT_RELAY_KEY  = "your-exit-key";                 // key 2 — same as ZYRLN_RELAY_KEY on the VPS
+```
+
+See [Cloudflare Worker setup](docs/cloudflare-setup.md) for Wrangler deploy details.
 
 4. Click **Deploy → New deployment**
    - Type: **Web app**

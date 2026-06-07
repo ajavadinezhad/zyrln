@@ -21,18 +21,37 @@ export default {
       if (isTunnelPath(url.pathname)) {
         return forwardTunnel(request, env);
       }
-      return handleRelay(request);
+      return handleRelay(request, env);
     } catch (err) {
       return json({ e: String(err) }, 500);
     }
   },
 };
 
+function exitRelayKey(env) {
+  return String(env.ZYRLN_RELAY_KEY || env.RELAY_KEY || "").trim();
+}
+
+function requireExitRelayKey(request, env) {
+  const key = exitRelayKey(env);
+  if (!key) {
+    return null;
+  }
+  if (request.headers.get("X-Relay-Key") !== key) {
+    return { ok: false, e: "unauthorized" };
+  }
+  return null;
+}
+
 function isTunnelPath(pathname) {
   return pathname === "/tunnel" || pathname.endsWith("/tunnel");
 }
 
 async function forwardTunnel(request, env) {
+  const authErr = requireExitRelayKey(request, env);
+  if (authErr) {
+    return json(authErr, 401);
+  }
   if (!env.TUNNEL_HUB) {
     return json({ ok: false, e: "tunnel not configured (missing TUNNEL_HUB binding)" }, 503);
   }
@@ -40,7 +59,11 @@ async function forwardTunnel(request, env) {
   return env.TUNNEL_HUB.get(id).fetch(request);
 }
 
-async function handleRelay(request) {
+async function handleRelay(request, env) {
+  const authErr = requireExitRelayKey(request, env);
+  if (authErr) {
+    return json(authErr, 401);
+  }
   if (request.headers.get("x-relay-hop") === "1") {
     return json({ e: "loop detected" }, 508);
   }
@@ -97,9 +120,9 @@ export class TunnelHub extends DurableObject {
       return tunnelResp({ e: "POST required" }, 405);
     }
 
-    const relayKey = (this.env.RELAY_KEY || "").trim();
-    if (relayKey && request.headers.get("X-Relay-Key") !== relayKey) {
-      return tunnelResp({ e: "unauthorized" }, 401);
+    const authErr = requireExitRelayKey(request, this.env);
+    if (authErr) {
+      return tunnelResp(authErr, 401);
     }
 
     const raw = await request.text();

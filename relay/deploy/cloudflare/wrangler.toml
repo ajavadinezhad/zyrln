@@ -2,9 +2,10 @@ name = "mine"   # your Worker name in the Cloudflare dashboard
 main = "worker.js"
 compatibility_date = "2025-01-01"
 
-# Optional shared secret (match EXIT_RELAY_KEY in Apps Script when set on VPS).
+# Exit key (key 2) — same value as EXIT_RELAY_KEY in Apps Script. Same name as VPS: ZYRLN_RELAY_KEY.
+# RELAY_KEY is a legacy alias; prefer ZYRLN_RELAY_KEY.
 # [vars]
-# RELAY_KEY = ""
+# ZYRLN_RELAY_KEY = "your-exit-key"
 
 [[durable_objects.bindings]]
 name = "TUNNEL_HUB"

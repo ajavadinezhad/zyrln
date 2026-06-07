@@ -1,7 +1,7 @@
 const AUTH_KEY = "CHANGE_ME_TO_A_LONG_RANDOM_SECRET";
-const EXIT_RELAY_URL = "https://CHANGE_ME_EXIT_RELAY_URL/relay";
-const EXIT_TUNNEL_URL = "http://CHANGE_ME_EXIT_TUNNEL_URL/tunnel"; // optional; leave "" to derive from EXIT_RELAY_URL (Worker or VPS)
-const EXIT_RELAY_KEY = "";
+const EXIT_RELAY_URL = "https://CHANGE_ME_EXIT_RELAY_URL"; // Cloudflare: worker URL, no /relay. VPS: http://IP:8787/relay
+const EXIT_TUNNEL_URL = ""; // Cloudflare: leave empty (derives /tunnel). VPS: http://YOUR_VPS_IP:8787/tunnel
+const EXIT_RELAY_KEY = ""; // same value as ZYRLN_RELAY_KEY on VPS or Cloudflare Worker
 
 const SKIP_HEADERS = {
   host: true,

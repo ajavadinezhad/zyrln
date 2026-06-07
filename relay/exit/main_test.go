@@ -50,7 +50,6 @@ func TestHandleRelay_RejectsBadURL(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
 			r := httptest.NewRequest(http.MethodPost, "/relay", strings.NewReader(tc.body))
-
 			handleRelay(w, r, http.DefaultClient, "", time.Second)
 
 			if w.Code != http.StatusBadRequest {
@@ -89,7 +88,6 @@ func TestHandleRelay_ForwardsRequestAndEncodesResponse(t *testing.T) {
 	raw, _ := json.Marshal(payload)
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodPost, "/relay", bytes.NewReader(raw))
-
 	handleRelay(w, r, target.Client(), "", time.Second)
 
 	if w.Code != http.StatusOK {
@@ -173,7 +171,6 @@ func TestHandleRelay_RedirectMode(t *testing.T) {
 func TestHandleRelay_RejectsInvalidJSON(t *testing.T) {
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodPost, "/relay", strings.NewReader(`not-json`))
-
 	handleRelay(w, r, http.DefaultClient, "", time.Second)
 
 	if w.Code != http.StatusBadRequest {
@@ -202,7 +199,6 @@ func TestHandleRelay_RejectsMissingMethodDefault(t *testing.T) {
 func TestHandleRelay_RejectsBadBase64Body(t *testing.T) {
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodPost, "/relay", strings.NewReader(`{"u":"https://example.com","b":"%%%"}`))
-
 	handleRelay(w, r, http.DefaultClient, "", time.Second)
 
 	if w.Code != http.StatusBadRequest {
@@ -216,7 +212,6 @@ func postRelayRequest(t *testing.T, client *http.Client, payload relayRequest) r
 	raw, _ := json.Marshal(payload)
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodPost, "/relay", bytes.NewReader(raw))
-
 	handleRelay(w, r, client, "", time.Second)
 
 	if w.Code != http.StatusOK {

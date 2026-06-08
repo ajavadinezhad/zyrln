@@ -66,6 +66,12 @@ Expect `{"ok":true}`. If you see `missing TUNNEL_HUB binding`, run `wrangler dep
 | Android tunnel / Telegram | Yes | Yes |
 | Desktop HTTP relay | Yes | Yes |
 | Key 2 name | `ZYRLN_RELAY_KEY` | `ZYRLN_RELAY_KEY` |
-| Sites on Cloudflare IPs (e.g. ChatGPT) | No | Yes |
+| Sites behind Cloudflare (X, Discord, ChatGPT…) | **No** — see below | Yes |
+
+## Cloudflare-fronted destinations don't work
+
+A Worker can't reach sites behind Cloudflare — the runtime blocks outbound TCP to Cloudflare IPs (close code `4001`). Platform limit, no Worker-side fix.
+
+Major broken services: **X / Twitter, Discord, ChatGPT, LinkedIn** (plus most ad/CDN domains). Use a VPS exit for these. We intend to work toward routing such hosts to a non-Cloudflare exit.
 
 Files: [`worker.js`](../relay/deploy/cloudflare/worker.js), [`wrangler.toml`](../relay/deploy/cloudflare/wrangler.toml).

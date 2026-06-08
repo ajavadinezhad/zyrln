@@ -14,6 +14,22 @@ const MAX_RX_WAIT_MS = 3000;
 const SESSION_IDLE_MS = 2 * 60 * 1000;
 const TUNNEL_HUB_NAME = "zyrln-tunnel-hub";
 
+/** Serializes async work (one TX/RX at a time per lock, like VPS readMu/writeMu). */
+class AsyncMutex {
+  constructor() {
+    this.tail = Promise.resolve();
+  }
+
+  runExclusive(fn) {
+    const run = this.tail.then(fn, fn);
+    this.tail = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }
+}
+
 export default {
   async fetch(request, env) {
     try {
@@ -196,6 +212,10 @@ export class TunnelHub extends DurableObject {
         socket,
         reader,
         writer,
+        readMu: new AsyncMutex(),
+        writeMu: new AsyncMutex(),
+        readInflight: null,
+        rxBuf: null,
         target: String(target).trim(),
         lastSeen: Date.now(),
       });
@@ -218,9 +238,11 @@ export class TunnelHub extends DurableObject {
       return { e: "bad base64" };
     }
     try {
-      await sess.writer.write(data);
-      sess.lastSeen = Date.now();
-      return { ok: true };
+      return await sess.writeMu.runExclusive(async () => {
+        await sess.writer.write(data);
+        sess.lastSeen = Date.now();
+        return { ok: true };
+      });
     } catch (err) {
       await this.closeSession(id);
       return { e: String(err) };
@@ -235,12 +257,14 @@ export class TunnelHub extends DurableObject {
 
     const waitMs = clampRXWait(waitMS);
     try {
-      const chunk = await readWithTimeout(sess, waitMs);
-      sess.lastSeen = Date.now();
-      if (!chunk || chunk.length === 0) {
-        return { ok: true };
-      }
-      return { ok: true, data: bytesToBase64(chunk) };
+      return await sess.readMu.runExclusive(async () => {
+        const chunk = await readWithTimeout(sess, waitMs);
+        sess.lastSeen = Date.now();
+        if (!chunk || chunk.length === 0) {
+          return { ok: true };
+        }
+        return { ok: true, data: bytesToBase64(chunk) };
+      });
     } catch (err) {
       await this.closeSession(id);
       return { e: String(err) };
@@ -253,21 +277,25 @@ export class TunnelHub extends DurableObject {
       return;
     }
     this.sessions.delete(id);
-    try {
-      await sess.reader.cancel();
-    } catch {
-      // ignore
-    }
-    try {
-      await sess.writer.close();
-    } catch {
-      // ignore
-    }
-    try {
-      await sess.socket.close();
-    } catch {
-      // ignore
-    }
+    await sess.readMu.runExclusive(async () => {
+      await sess.writeMu.runExclusive(async () => {
+        try {
+          await sess.reader.cancel();
+        } catch {
+          // ignore
+        }
+        try {
+          await sess.writer.close();
+        } catch {
+          // ignore
+        }
+        try {
+          await sess.socket.close();
+        } catch {
+          // ignore
+        }
+      });
+    });
   }
 
   async scheduleCleanup() {
@@ -291,27 +319,45 @@ export class TunnelHub extends DurableObject {
 }
 
 async function readWithTimeout(sess, waitMs) {
+  if (sess.rxBuf && sess.rxBuf.byteLength > 0) {
+    const out = sess.rxBuf;
+    sess.rxBuf = null;
+    return out;
+  }
+
   const deadline = Date.now() + waitMs;
   while (Date.now() < deadline) {
     const remaining = deadline - Date.now();
-    const result = await Promise.race([
-      sess.reader.read(),
-      delay(remaining).then(() => ({ timedOut: true })),
-    ]);
-    if (result.timedOut) {
-      try {
-        await sess.reader.cancel();
-      } catch {
-        // ignore
-      }
-      sess.reader = sess.socket.readable.getReader();
+    if (remaining <= 0) {
+      break;
+    }
+
+    if (!sess.readInflight) {
+      sess.readInflight = sess.reader.read();
+    }
+
+    let raced;
+    try {
+      raced = await Promise.race([
+        sess.readInflight,
+        delay(remaining).then(() => ({ timedOut: true })),
+      ]);
+    } catch (err) {
+      sess.readInflight = null;
+      throw err;
+    }
+
+    if (raced && raced.timedOut) {
+      // Leave readInflight pending; next opRX reuses the same reader.read().
       return null;
     }
-    if (result.done) {
+
+    sess.readInflight = null;
+    if (raced.done) {
       return null;
     }
-    if (result.value && result.value.byteLength > 0) {
-      return result.value;
+    if (raced.value && raced.value.byteLength > 0) {
+      return raced.value;
     }
   }
   return null;

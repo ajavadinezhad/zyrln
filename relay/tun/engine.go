@@ -6,6 +6,7 @@ import (
 	"os"
 	"sync"
 	"syscall"
+	"time"
 
 	"zyrln/relay/core"
 )
@@ -119,5 +120,13 @@ func (e *Engine) stop() {
 		_ = e.tun.Close()
 		e.tun = nil
 	}
-	e.wg.Wait()
+	done := make(chan struct{})
+	go func() {
+		e.wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+	}
 }

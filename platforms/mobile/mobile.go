@@ -245,12 +245,10 @@ func Ping(appScriptURL, authKey string) string {
 }
 
 // Stop shuts down the relay proxy.
-// Uses Close instead of Shutdown to avoid blocking the Android main thread.
+// Close the listener first so IsRunning() clears immediately on Android disconnect.
 func Stop() {
 	mu.Lock()
 	defer mu.Unlock()
-	stopTUNLocked()
-	tunnel.StopActiveTunnel()
 	if listener != nil {
 		_ = listener.Close()
 		listener = nil
@@ -259,6 +257,8 @@ func Stop() {
 		_ = server.Close()
 		server = nil
 	}
+	tunnel.StopActiveTunnel()
+	stopTUNLocked()
 	emitLog("system", "Proxy stopped")
 }
 

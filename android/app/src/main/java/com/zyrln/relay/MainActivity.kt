@@ -53,6 +53,7 @@ class MainActivity : AppCompatActivity() {
     private var selectedUrl: String? = null
     private var selectedKey: String? = null
     private var directOnlySelected: Boolean = false
+    private var userRequestedStop = false
 
     private val vpnPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -69,7 +70,9 @@ class MainActivity : AppCompatActivity() {
 
     private val startedReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
+            userRequestedStop = false
             startUptimeTicker()
+            startLogPolling()
             updateUI(running = true)
         }
     }
@@ -99,8 +102,10 @@ class MainActivity : AppCompatActivity() {
 
     private val stopReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
+            userRequestedStop = false
             activeUrl = null
             activeKey = null
+            stopLogPolling()
             stopUptimeTicker()
             updateUI(running = false)
         }
@@ -214,11 +219,12 @@ class MainActivity : AppCompatActivity() {
         androidx.core.content.ContextCompat.registerReceiver(this, startedReceiver, IntentFilter(RelayVpnService.ACTION_STARTED), androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED)
         androidx.core.content.ContextCompat.registerReceiver(this, stopReceiver, IntentFilter(RelayVpnService.ACTION_STOPPED), androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED)
         androidx.core.content.ContextCompat.registerReceiver(this, errorReceiver, IntentFilter(RelayVpnService.ACTION_ERROR), androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED)
-        startLogPolling()
         syncModeFromPrefs()
         applyDirectEnabledFromPrefs()
-        if (Mobile.isRunning()) resumeUptimeTicker() else stopUptimeTicker()
-        updateUI(running = Mobile.isRunning())
+        val running = Mobile.isRunning() && !userRequestedStop
+        if (running) resumeUptimeTicker() else stopUptimeTicker()
+        if (running) startLogPolling() else stopLogPolling()
+        updateUI(running = running)
     }
 
     override fun onPause() {
@@ -644,6 +650,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun launchRelayService() {
+        userRequestedStop = false
         applyDirectEnabledFromPrefs()
         val url = prefs.getString("url", "") ?: ""
         val key = prefs.getString("key", "") ?: ""
@@ -659,9 +666,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun stopVpn() {
+        userRequestedStop = true
         startService(Intent(this, RelayVpnService::class.java).apply { action = RelayVpnService.ACTION_STOP })
         activeUrl = null
         activeKey = null
+        stopLogPolling()
         stopUptimeTicker()
         updateUI(running = false)
     }

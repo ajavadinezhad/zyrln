@@ -31,7 +31,7 @@ import (
 const defaultProxyAddress = "direct"
 
 // appVersion must match VERSION at repo root (Go embed cannot reference parent dirs).
-const appVersion = "2.0-pre-3"
+const appVersion = "2.0-pre-4"
 
 //go:embed gui/*
 var embeddedGUI embed.FS

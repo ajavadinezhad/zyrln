@@ -814,6 +814,124 @@ func TestProfileDisplayName_FallbackNoURL(t *testing.T) {
 	}
 }
 
+func TestApplyProfileConfig_MergesProfileOverrides(t *testing.T) {
+	base := map[string]string{
+		"listen":                 "127.0.0.1:8085",
+		"fronted-appscript-url":  "https://old.example/exec",
+		"auth-key":               "old-key",
+	}
+	profile := map[string]string{
+		"name":                   "Work",
+		"listen":                 "127.0.0.1:9999",
+		"fronted-appscript-url":  "https://new.example/exec",
+		"auth-key":               "new-key",
+	}
+	got := applyProfileConfig(base, profile)
+	if got["listen"] != "127.0.0.1:8085" {
+		t.Errorf("listen = %q, want base preserved", got["listen"])
+	}
+	if got["fronted-appscript-url"] != "https://new.example/exec" {
+		t.Errorf("url = %q", got["fronted-appscript-url"])
+	}
+	if got["auth-key"] != "new-key" {
+		t.Errorf("auth-key = %q", got["auth-key"])
+	}
+}
+
+func TestProfileConfig_StripsGlobalKeys(t *testing.T) {
+	got := profileConfig(map[string]string{
+		"listen":                "127.0.0.1:9090",
+		"socks-listen":          "127.0.0.1:1090",
+		"fronted-appscript-url": "https://script.google.com/macros/s/ABC/exec",
+	})
+	if _, ok := got["listen"]; ok {
+		t.Error("listen should be stripped from profile config")
+	}
+	if _, ok := got["socks-listen"]; ok {
+		t.Error("socks-listen should be stripped from profile config")
+	}
+	if got["fronted-appscript-url"] == "" {
+		t.Error("expected relay url in profile config")
+	}
+}
+
+func TestParseURLList_CommaSeparated(t *testing.T) {
+	got := parseURLList(" https://a.example/exec , https://b.example/exec ")
+	if len(got) != 2 {
+		t.Fatalf("len = %d, want 2", len(got))
+	}
+	if got[0] != "https://a.example/exec" || got[1] != "https://b.example/exec" {
+		t.Fatalf("urls = %v", got)
+	}
+}
+
+func TestGUISettingsDirectEnabledRoundTrip(t *testing.T) {
+	resetGUIStateForTest(t)
+	orig := core.GetDirectEnabled()
+	t.Cleanup(func() { core.SetDirectEnabled(orig) })
+
+	dir := t.TempDir()
+	handler := newTestGUIHandler(t, dir, nil)
+
+	var got map[string]any
+	getJSON(t, handler, "/api/settings", &got)
+	if got["directEnabled"] != true {
+		t.Fatalf("default directEnabled = %v, want true", got["directEnabled"])
+	}
+
+	body := bytes.NewBufferString(`{"directEnabled":false}`)
+	resp := httptest.NewRecorder()
+	handler.ServeHTTP(resp, httptest.NewRequest(http.MethodPost, "/api/settings", body))
+	if resp.Code != http.StatusOK {
+		t.Fatalf("POST /api/settings status = %d, body=%s", resp.Code, resp.Body.String())
+	}
+	if core.GetDirectEnabled() {
+		t.Fatal("expected direct disabled after POST")
+	}
+
+	cfg := loadConfig(filepath.Join(dir, "config.env"))
+	if cfg["direct-enabled"] != "false" {
+		t.Fatalf("config direct-enabled = %q", cfg["direct-enabled"])
+	}
+
+	getJSON(t, handler, "/api/settings", &got)
+	if got["directEnabled"] != false {
+		t.Fatalf("directEnabled after POST = %v", got["directEnabled"])
+	}
+}
+
+func TestGUIPingDirectMode(t *testing.T) {
+	resetGUIStateForTest(t)
+	dir := t.TempDir()
+	handler := newTestGUIHandler(t, dir, nil)
+
+	body := bytes.NewBufferString(`{"direct":true}`)
+	resp := httptest.NewRecorder()
+	handler.ServeHTTP(resp, httptest.NewRequest(http.MethodPost, "/api/ping", body))
+	if resp.Code != http.StatusOK {
+		t.Fatalf("POST /api/ping status = %d, body=%s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := got["ok"]; !ok {
+		t.Fatalf("missing ok field: %#v", got)
+	}
+}
+
+func TestGUIDownloadCANotFound(t *testing.T) {
+	resetGUIStateForTest(t)
+	dir := t.TempDir()
+	handler := newTestGUIHandler(t, dir, nil)
+
+	resp := httptest.NewRecorder()
+	handler.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, "/api/download-ca", nil))
+	if resp.Code != http.StatusNotFound {
+		t.Fatalf("GET /api/download-ca status = %d, want 404", resp.Code)
+	}
+}
+
 func TestFrontedRedirectProbe_AbsoluteLocation(t *testing.T) {
 	orig := probe{
 		ID: "p1", Name: "Test", Category: "cat",

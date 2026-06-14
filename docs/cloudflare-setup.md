@@ -67,6 +67,9 @@ Expect `{"ok":true}`. If you see `missing TUNNEL_HUB binding`, run `wrangler dep
 | Desktop HTTP relay | Yes | Yes |
 | Key 2 name | `ZYRLN_RELAY_KEY` | `ZYRLN_RELAY_KEY` |
 | Sites behind Cloudflare (X, Discord, ChatGPT…) | **No** — see below | Yes |
+| Long-lived connection stability | Good, not perfect — see below | Best |
+
+**Recommendation: use a VPS as the primary exit and the Worker as a free fallback.**
 
 ## Cloudflare-fronted destinations don't work
 

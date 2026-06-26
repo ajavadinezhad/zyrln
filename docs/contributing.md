@@ -1,77 +1,100 @@
 # Contributing
 
-For a high-level overview of what each component does, see the [Components table in the README](../README.md#components).
+User setup: [README.md](../README.md) · [فارسی](fa/guide.md). Relay deploy: [cloudflare-setup.md](cloudflare-setup.md).
 
-## Project Structure
+## Project structure
 
 ```
 zyrln/
 ├── platforms/
-│   ├── desktop/        # Desktop CLI binary (main package)
-│   │   ├── main.go     # CLI flags, probe runner, relay-fetch, proxy launcher
-│   │   └── main_test.go
+│   ├── desktop/        # CLI + browser GUI (main package)
+│   │   ├── main.go
+│   │   └── gui/
 │   └── mobile/         # gomobile bindings for Android
-│       └── mobile.go   # Exported API: StartTunnel, StartDirect, Stop, Ping, …
+│       └── mobile.go   # StartTunnel, StartDirect, AttachTUN, Stop, Ping, …
 │
 ├── relay/
-│   ├── README.md       # Package map (see relay/README.md)
 │   ├── core/           # Stable API re-export (desktop + mobile import this)
-│   ├── route/          # Direct / domestic / fragmentation routing
+│   ├── route/          # Google direct, domestic bypass, TLS fragmentation
 │   ├── appscript/      # Domain-fronted HTTP relay + Coalescer
-│   ├── mitm/           # Local HTTP+SOCKS MITM proxy (desktop)
-│   ├── tunnel/         # TCP-over-HTTP tunnel (Android)
-│   ├── exit/           # VPS exit relay binary
+│   ├── mitm/           # Local HTTP CONNECT + SOCKS5 MITM (desktop)
+│   ├── tunnel/         # Raw TCP-over-HTTP tunnel client (Android relay path)
+│   ├── tun/            # TUN IPv4 forwarder (Android VPN fd)
+│   ├── exit/           # VPS / self-hosted exit relay binary
+│   ├── conn/, log/, netdial/
 │   └── deploy/
 │       ├── apps-script/Code.gs
 │       └── cloudflare/worker.js
 │
-├── android/            # Android Studio project
+├── android/
 │   └── app/src/main/java/com/zyrln/relay/
-│       ├── MainActivity.kt      # UI: connect/disconnect, config import, direct toggle
-│       └── RelayVpnService.kt   # VpnService: StartTunnel/StartDirect, system HTTP proxy
+│       ├── MainActivity.kt
+│       ├── RelayVpnService.kt
+│       ├── SplitTunnelAppsActivity.kt
+│       └── ConfigUtils.kt
 │
-├── docs/               # Setup guides
+├── docs/
 ├── Makefile
 └── go.mod
 ```
 
-## Key Concepts
+## Relay packages
 
-**`relay/core`** is the heart of the project. Both the desktop binary and the Android app import it.
+| Package | Used by | Role |
+|---------|---------|------|
+| `route` | `tunnel`, `mitm`, `tun` | Per-host routing before relay/tunnel |
+| `appscript` | `mitm`, `tunnel` | Outbound HTTP to Apps Script (domain-fronted) |
+| `mitm` | Desktop | Browser proxy + local CA MITM |
+| `tunnel` | Android | CONNECT proxy over Apps Script `/tunnel` |
+| `tun` | Android | VPN TUN → local proxy (with `AttachTUN`) |
+| `exit` | VPS deploy | `/relay` + `/tunnel` exit |
 
-- `relay.go`: builds and sends a relay request through domain-fronting. The domain-fronting trick is that `req.URL.Host` is set to the front domain (e.g. `www.google.com`) so TLS connects to Google's IPs, while `req.Host` carries the real Apps Script hostname inside the encrypted TLS tunnel.
-- `proxy.go`: HTTP proxy that intercepts browser traffic. HTTP requests are relayed directly; HTTPS connections use `CONNECT` tunneling with local TLS termination (MITM).
-- `cert.go`: generates a local CA and signs per-hostname leaf certificates on demand, cached in memory.
-- `direct.go`: direct mode for Google services. Detects Google domains and dials them directly with fragmentation — no MITM, no relay.
-- `fragment.go`: splits the first TLS ClientHello into 87 random-boundary chunks with 5ms delay each, preventing SNDPI from reading the SNI field.
+When changing relay JSON or `Code.gs`, update **`deploy/apps-script/Code.gs`** and **`appscript`** together. Tunnel fields (`t`, `tb`) must not alter legacy relay parsing (`u`, `q`, `gz`).
 
-**`platforms/mobile`** exposes a flat string-based API (`StartTunnel`, `StartDirect`, `Stop`, `Ping`, etc.) because gomobile only supports primitive types at the boundary. All errors are returned as strings, not Go `error` values.
+## Routing (by host)
 
-## Running Tests
+Evaluated in order:
+
+1. **Domestic** — `.ir` or bundled list → plain TCP (no Apps Script, no MITM).
+2. **Direct** — when enabled, Google domains → TLS ClientHello fragmentation.
+3. **Relay** — everything else → Apps Script (desktop: MITM + HTTP relay; Android: TCP tunnel).
+
+**Android:** VPN + TUN forwarder + local CONNECT proxy. End-to-end TLS through tunnel; no CA install.
+
+**Desktop:** HTTP CONNECT / SOCKS. Foreign HTTPS on the relay path needs **CA installed** (MITM decrypt → Apps Script relay).
+
+## Key concepts
+
+**`relay/core`** re-exports the stable API. Implementation lives in subpackages:
+
+- `relay/appscript/relay.go` — domain-fronted relay requests (`buildRelayPayload`, `RelayRequestMulti`).
+- `relay/mitm/proxy.go` — HTTP/SOCKS proxy; HTTPS uses CONNECT + MITM when relaying.
+- `relay/mitm/cert.go` — local CA and per-host leaf certs.
+- `relay/route/direct.go`, `fragment.go` — Google detection and TLS fragmentation.
+
+**`platforms/mobile`** exposes a flat string-based API because gomobile only supports primitives at the boundary. Errors return as strings, not Go `error` values.
+
+## Running tests
 
 ```bash
 go test ./relay/... ./platforms/desktop/...
 ```
 
-Or everything at once:
+Or everything:
 
 ```bash
 go test ./...
 ```
 
-Tests use only the standard library, no external test frameworks.
-
 ## Building
 
 ```bash
-make desktop          # build local ./zyrln CLI binary for this machine
-make desktop-release  # build release binaries in dist/ for Linux, Windows, and macOS
-make android          # build signed release APK (requires keystore)
+make desktop          # local ./zyrln
+make desktop-release  # dist/ binaries for Linux, Windows, macOS
+make android          # signed release APK (requires keystore)
 ```
 
-Desktop release binaries use platform-specific names such as `zyrln-VERSION-linux-amd64`, `zyrln-VERSION-windows-amd64.exe`, `zyrln-VERSION-darwin-arm64`, and `zyrln-VERSION-darwin-amd64`.
-
-First-time gomobile setup:
+First-time gomobile:
 
 ```bash
 go install golang.org/x/mobile/cmd/gomobile@latest
@@ -79,41 +102,36 @@ gomobile init
 export ANDROID_HOME=~/Android/Sdk
 ```
 
-## Adding a New Probe
+## Adding a probe
 
-Probes are defined in `platforms/desktop/main.go` in the `defaultProbes()` function. Each probe is a `probe` struct:
+Probes live in `platforms/desktop/main.go` → `defaultProbes()`:
 
 ```go
 {
     ID:          "unique-id",
     Name:        "Human readable name",
-    Category:    "baseline",   // used for --category filtering
+    Category:    "baseline",
     Method:      http.MethodGet,
     URL:         "https://example.com/",
     Expectation: "what a passing result means",
 }
 ```
 
-## Changing the Relay Protocol
+## Changing the relay protocol
 
-The relay payload format is defined in `relay/appscript/relay.go` (`buildRelayPayload`) and must match what `relay/deploy/apps-script/Code.gs` expects. If you change either side, update both.
+Payload format: `relay/appscript/relay.go` (`BuildRelayPayload`) must match `relay/deploy/apps-script/Code.gs`.
 
-The Apps Script response format is `workerResponse` in `relay.go`:
+Response shape (`workerResponse` in `relay.go`):
 
 ```go
 type workerResponse struct {
     Status  int               `json:"s"`
     Headers map[string]string `json:"h"`
-    Body    string            `json:"b"` // base64-encoded
+    Body    string            `json:"b"` // base64
     Error   string            `json:"e"`
 }
 ```
 
-## Secrets and Gitignore
+## Secrets
 
-Never commit:
-- `config.env`: contains your Apps Script URL and auth key
-- `certs/`: contains the local CA private key
-- Any file containing `AUTH_KEY` or relay keys
-
-These are covered by `.gitignore`. See [Key Generation in the README](../README.md#prerequisites) for how to generate a key.
+Never commit `config.env`, `certs/`, or files containing `AUTH_KEY` / relay keys. Generate the client auth key in the desktop GUI: **Settings → Generate Key**.

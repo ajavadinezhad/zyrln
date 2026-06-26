@@ -1,5 +1,7 @@
 # Cloudflare Worker Setup
 
+[فارسی](fa/cloudflare-setup.md)
+
 Free exit alternative to a VPS. One Worker handles **HTTP relay** (desktop) and **TCP tunnel** (Android). Deploy with Wrangler only — it uploads the code and registers the `TUNNEL_HUB` Durable Object binding Android needs.
 
 ## Two keys

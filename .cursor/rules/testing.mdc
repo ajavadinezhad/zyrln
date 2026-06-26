@@ -9,7 +9,7 @@ alwaysApply: true
 
 When a test fails:
 
-1. Decide whether the **code** or the **test** is wrong against the real requirement (README, issues, invariants).
+1. Decide whether the **code** or the **test** is wrong against the real requirement (docs, issues, invariants).
 2. If the test is wrong or outdated, **fix or delete the test** — do not add shims, lists, or branches in production code solely to satisfy assertions.
 3. Do not add “exclude” lists that undo “include” lists, or duplicate configuration, just to reconcile contradictory tests.
 4. Prefer fixing tests in the same change as a behavior fix; document intentional behavior in a short comment only when non-obvious.

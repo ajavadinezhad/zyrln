@@ -2,7 +2,7 @@ package route
 
 import "testing"
 
-// Hosts used in stack diagrams (relay/README.md).
+// Hosts used in routing matrix tests (domestic / Google / relay).
 const (
 	hostDigikala = "digikala.com"
 	hostGoogle   = "www.google.com"

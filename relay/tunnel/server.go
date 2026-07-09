@@ -103,7 +103,7 @@ func handleRelayTunnelConnect(local io.ReadWriter, targetHost string, pb *tunnel
 		return
 	}
 	if core.IsGoogleDomain(host) && !core.GetDirectEnabled() {
-		core.Log("info", "tunnel CONNECT %s (direct bypass off)", target)
+		core.Log("debug", "tunnel CONNECT %s (direct bypass off)", target)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -122,6 +122,6 @@ func handleRelayTunnelConnect(local io.ReadWriter, targetHost string, pb *tunnel
 	if c := core.ConnFromReadWriter(local); c != nil {
 		_, _ = c.Write([]byte("HTTP/1.1 200 Connection Established\r\n\r\n"))
 	}
-	core.Log("info", "tunnel CONNECT %s", target)
+	core.Log("debug", "tunnel CONNECT %s", target)
 	RunTunnelBridge(ctx, local, sess, target, pb.tunnel.timeout)
 }

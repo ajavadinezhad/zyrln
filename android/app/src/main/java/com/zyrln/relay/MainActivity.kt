@@ -42,7 +42,8 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         // Survives activity recreation (theme/language change)
-        private val logCache = android.text.SpannableStringBuilder()
+        private val logCache = StringBuilder()
+        private const val MAX_LOG_LINES = 200
         private const val DEFAULT_DIRECT_ONLY = true
         private const val STATE_USER_REQUESTED_STOP = "user_requested_stop"
     }
@@ -84,10 +85,15 @@ class MainActivity : AppCompatActivity() {
         override fun run() {
             val raw = Mobile.pollLogs()
             if (raw.isNotEmpty()) {
-                raw.split('\n').forEach { line ->
+                val entries = ArrayList<Pair<String, String>>(8)
+                for (line in raw.split('\n')) {
                     val tab = line.indexOf('\t')
-                    if (tab >= 0) appendLog(line.substring(0, tab), line.substring(tab + 1))
+                    if (tab < 0) continue
+                    val level = line.substring(0, tab)
+                    if (level == "debug") continue
+                    entries.add(level to line.substring(tab + 1))
                 }
+                if (entries.isNotEmpty()) appendLogBatch(entries)
             }
             logPollHandler.postDelayed(this, 500)
         }
@@ -204,7 +210,7 @@ class MainActivity : AppCompatActivity() {
 
         // Restore log cache after recreation (theme/language change)
         if (logCache.isNotEmpty() && initialRunning) {
-            binding.logOutput.text = logCache
+            binding.logOutput.text = logCache.toString()
             binding.logScroll.post { binding.logScroll.fullScroll(View.FOCUS_DOWN) }
         }
 
@@ -660,40 +666,33 @@ class MainActivity : AppCompatActivity() {
         if (vpnIntent != null) vpnPermissionLauncher.launch(vpnIntent) else launchRelayService()
     }
 
-    private fun appendLog(level: String, msg: String) {
-        if (level == "debug") return
+    private fun appendLogBatch(entries: List<Pair<String, String>>) {
+        if (entries.isEmpty()) return
         runOnUiThread {
-            val time = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
-                .format(java.util.Date())
-            val color = when (level) {
-                "error" -> ContextCompat.getColor(this, R.color.accent_error)
-                "system" -> ContextCompat.getColor(this, R.color.primary)
-                else -> ContextCompat.getColor(this, R.color.text_dim)
+            val scroll = binding.logScroll
+            val atBottom = !scroll.canScrollVertically(1)
+            val timeFmt = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
+            for ((_, msg) in entries) {
+                val time = timeFmt.format(java.util.Date())
+                logCache.append('[').append(time).append("] ").append(msg).append('\n')
             }
-            val line = "[$time] $msg\n"
-            val spannable = android.text.SpannableString(line)
-            spannable.setSpan(
-                android.text.style.ForegroundColorSpan(color),
-                0, line.length,
-                android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
-            )
-            logCache.append(spannable)
-            binding.logOutput.append(spannable)
-            // Count newlines; if over 200 lines trim from the front until 200 remain
-            var newlines = 0
-            for (i in logCache.indices) if (logCache[i] == '\n') newlines++
-            if (newlines > 200) {
-                var toRemove = newlines - 200
-                var pos = 0
-                while (toRemove > 0 && pos < logCache.length) {
-                    if (logCache[pos] == '\n') toRemove--
-                    pos++
-                }
-                logCache.delete(0, pos)
-                binding.logOutput.text = logCache
-            }
-            binding.logScroll.post { binding.logScroll.fullScroll(android.view.View.FOCUS_DOWN) }
+            trimLogCache()
+            binding.logOutput.text = logCache.toString()
+            if (atBottom) scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
         }
+    }
+
+    private fun trimLogCache() {
+        var newlines = 0
+        for (i in logCache.indices) if (logCache[i] == '\n') newlines++
+        if (newlines <= MAX_LOG_LINES) return
+        var toRemove = newlines - MAX_LOG_LINES
+        var pos = 0
+        while (toRemove > 0 && pos < logCache.length) {
+            if (logCache[pos] == '\n') toRemove--
+            pos++
+        }
+        logCache.delete(0, pos)
     }
 
     private fun applyDirectEnabledFromPrefs() {

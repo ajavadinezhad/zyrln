@@ -165,7 +165,7 @@ func handlePlainConnect(clientConn net.Conn, targetHost string) {
 	}
 	defer serverConn.Close()
 	_, _ = clientConn.Write([]byte("HTTP/1.1 200 Connection Established\r\n\r\n"))
-	log.Logf("info", "domestic %s", targetHost)
+	log.Logf("debug", "domestic %s", targetHost)
 	pipe(clientConn, serverConn)
 }
 
@@ -176,6 +176,6 @@ func DialPlainDirect(targetHost string) (net.Conn, bool) {
 		log.Logf("error", "domestic %s: %v", targetHost, err)
 		return nil, false
 	}
-	log.Logf("info", "domestic %s", targetHost)
+	log.Logf("debug", "domestic %s", targetHost)
 	return conn, true
 }

@@ -119,7 +119,7 @@ func (f *tcpFlow) connect(clientSYN uint32) {
 	f.backend = conn
 	f.mu.Unlock()
 
-	log.Logf("info", "tun ready %s", target)
+	log.Logf("debug", "tun ready %s", target)
 	f.completeConnect(clientSYN)
 	go f.pumpBackend()
 }
@@ -158,7 +158,7 @@ func (f *tcpFlow) connectTunnel(clientSYN uint32, target string) {
 
 	go tunnel.RunTunnelBridge(bridgeCtx, remote, sess, target, cfg.timeout())
 
-	log.Logf("info", "tun ready %s", target)
+	log.Logf("debug", "tun ready %s", target)
 	f.completeConnect(clientSYN)
 	go f.pumpBackend()
 }

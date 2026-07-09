@@ -117,7 +117,7 @@ func handleDirectConnect(clientConn net.Conn, targetHost string) {
 	defer serverConn.Close()
 
 	_, _ = clientConn.Write([]byte("HTTP/1.1 200 Connection Established\r\n\r\n"))
-	log.Logf("info", "direct %s profile=%s %s", targetHost, profileID, elapsed.Round(time.Millisecond))
+	log.Logf("debug", "direct %s profile=%s %s", targetHost, profileID, elapsed.Round(time.Millisecond))
 	pipe(clientConn, serverConn)
 }
 
@@ -148,7 +148,7 @@ func DialFragment(addr string) (net.Conn, bool) {
 		log.Logf("error", "direct %s: %v", addr, err)
 		return nil, false
 	}
-	log.Logf("info", "direct %s profile=%s %s", addr, profileID, elapsed.Round(time.Millisecond))
+	log.Logf("debug", "direct %s profile=%s %s", addr, profileID, elapsed.Round(time.Millisecond))
 	return conn, true
 }
 

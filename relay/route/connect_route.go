@@ -46,11 +46,11 @@ func ConnectRouteForHost(host string) ConnectRoute {
 func ApplyBypassConnect(clientConn net.Conn, targetHostport string, route ConnectRoute) bool {
 	switch route {
 	case RouteDirectFragment:
-		log.Log("info", "direct CONNECT %s", targetHostport)
+		log.Log("debug", "direct CONNECT %s", targetHostport)
 		HandleDirectConnect(clientConn, targetHostport)
 		return true
 	case RouteDomesticPlain:
-		log.Log("info", "domestic CONNECT %s", targetHostport)
+		log.Log("debug", "domestic CONNECT %s", targetHostport)
 		HandlePlainConnect(clientConn, targetHostport)
 		return true
 	default:

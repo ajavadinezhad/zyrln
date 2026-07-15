@@ -2,7 +2,7 @@
 
 [راهنمای فارسی](docs/fa/guide.md)
 
-Bypass internet censorship in Iran. Routes traffic through Google's infrastructure — no VPN fingerprint, no blocked IP, no dedicated server to block.
+Censorship circumvention that routes traffic through Google's infrastructure — no typical VPN fingerprint, no dedicated exit IP that is easy to block on its own.
 
 Downloads: [GitHub Releases](https://github.com/ajavadinezhad/zyrln/releases)
 
@@ -12,15 +12,15 @@ Also: [Cloudflare exit setup](docs/cloudflare-setup.md) · [Contributing](docs/c
 
 ## How it works
 
-Iran's censorship system (SNDPI) blocks sites by inspecting traffic. Zyrln defeats it two ways:
+Many networks block sites by inspecting TLS (DPI / SNI). Zyrln uses two paths:
 
 **Google services (Gmail, Drive, Maps, etc.):**
-Traffic goes directly to Google with the TLS handshake split into tiny fragments. The censor can't reassemble them fast enough to read the SNI, so the connection passes. No server needed.
+Traffic goes straight to Google, but the TLS ClientHello is split into small fragments so middleboxes that rely on a clean SNI often fail to classify the connection. No server needed.
 
-**Everything else (Instagram, Twitter, etc.):**
-Traffic routes through Google Apps Script. From the censor's view it looks like normal Google traffic. Apps Script forwards to your exit relay (VPS or Cloudflare), which reaches the real site.
+**Everything else (Instagram, X, Telegram, …):**
+Traffic is domain-fronted through Google Apps Script, so it resembles ordinary Google HTTPS. Apps Script then forwards to your exit relay (VPS or Cloudflare), which opens the real destination.
 
-All relay traffic from clients **must** go through Apps Script (never connect the app directly to the VPS/Worker URL).
+Client relay/tunnel traffic **must** go through Apps Script (never point the app at the VPS/Worker URL). The exit is reached only from Google's side.
 
 ---
 

@@ -18,7 +18,12 @@ Many networks block sites by inspecting TLS (DPI / SNI). Zyrln uses two paths:
 Traffic goes straight to Google, but the TLS ClientHello is split into small fragments so middleboxes that rely on a clean SNI often fail to classify the connection. No server needed.
 
 **Everything else (Instagram, X, Telegram, …):**
-Traffic is domain-fronted through Google Apps Script, so it resembles ordinary Google HTTPS. Apps Script then forwards to your exit relay (VPS or Cloudflare), which opens the real destination.
+
+```
+Your device → Zyrln → Google Apps Script → your exit relay → the real site
+```
+
+Your device's TLS connections go to Google's own IP ranges; only the encrypted `Host` header — invisible to DPI — actually points at your Apps Script deployment. From a censor's point of view, this traffic is indistinguishable from someone using Google Docs. Apps Script then forwards to your exit relay (VPS or Cloudflare), which opens the real destination.
 
 Client relay/tunnel traffic **must** go through Apps Script (never point the app at the VPS/Worker URL). The exit is reached only from Google's side.
 
@@ -47,6 +52,8 @@ Direct Mode works for Google services that are SNI-filtered but not IP-blocked. 
 ## Full access (Instagram, Twitter, Telegram, …)
 
 Relay chain setup takes about 15 minutes.
+
+Follow the steps in order: the client generates your keys first, the exit relay needs one of them, and Apps Script needs the exit relay's URL plus both keys. Doing it in this order means you never have to backtrack and re-paste a value you didn't have yet.
 
 ### What you need
 
@@ -79,7 +86,7 @@ Relay chain setup takes about 15 minutes.
 
 ### Step 2 — Exit relay
 
-The exit fetches real websites. Pick one:
+The exit fetches real websites. Pick one — Cloudflare is simpler and free; a VPS gives you more control over who can see your traffic's destination metadata.
 
 #### Option A — Cloudflare Worker (free)
 
@@ -102,10 +109,11 @@ Front door on Google's servers.
 
 #### Two keys
 
-The app only uses key 1.
+Two separate, independent secrets — confusing them is the most common setup mistake. The app only uses key 1.
 
 | | Key 1 — client | Key 2 — exit |
 |---|---|---|
+| Purpose | Proves *your device* may use *your* Apps Script relay | Proves *your Apps Script* may use *your* exit relay |
 | Path | App → Apps Script | Apps Script → VPS or Cloudflare |
 | In the app | Yes (`auth-key`) | No |
 | Apps Script | `AUTH_KEY` | `EXIT_RELAY_KEY` |
@@ -183,6 +191,15 @@ See [docs/contributing.md](docs/contributing.md) for project layout and develope
 ---
 
 ## Troubleshooting
+
+**Relay chain not connecting (full access setup)**
+
+Check in order:
+
+1. Apps Script deployment live, with access set to "Anyone"?
+2. `EXIT_RELAY_KEY` in Apps Script exactly matches `ZYRLN_RELAY_KEY` on your VPS? (Cloudflare doesn't use this key.)
+3. VPS relay running and firewall port open? `curl -s http://YOUR_VPS_IP:8787/healthz` → `ok`
+4. Redeployed Apps Script after your last constant change? (Deploy → Manage deployments → pencil icon → New version → Deploy)
 
 **Nothing loads through the proxy**
 

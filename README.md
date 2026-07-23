@@ -1,4 +1,5 @@
-# Zyrln
+# Zyrln  
+[راهنمای فارسی](https://github.com/euphoria360/zyrln/blob/main/docs/fa/guide.md)
 
 A domain-fronting relay that routes your traffic through Google infrastructure to bypass DPI-based (deep packet inspection) censorship.
 

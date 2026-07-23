@@ -1,241 +1,246 @@
-# راهنمای راه‌اندازی زیرلن
+# Zyrln
 
-[English](../../README.md)
+یک رله‌ی دومین-فرانتینگ (domain-fronting) که ترافیک شما را از طریق زیرساخت گوگل عبور می‌دهد تا سانسور مبتنی بر DPI (بازرسی عمیق بسته) را دور بزند.
 
-ابزار دور زدن سانسور و فیلترینگ؛ ترافیک از زیرساخت گوگل عبور می‌کند — بدون اثر انگشت معمول VPN و بدون اینکه فقط به یک IP خروجی قابل بلاک تکیه کند.
+## تصویر کلی (اول این را بخوانید)
 
-دانلود: [GitHub Releases](https://github.com/ajavadinezhad/zyrln/releases)
-
----
-
-## چطور کار می‌کند
-
-خیلی از شبکه‌ها با بازرسی TLS (DPI / SNI) سایت‌ها را مسدود می‌کنند. زیرلن دو مسیر دارد:
-
-**سرویس‌های گوگل (جیمیل، درایو، مپس و…):**
-ترافیک مستقیم به گوگل می‌رود، اما ClientHello به قطعات کوچک تقسیم می‌شود تا میان‌افزاری که به یک SNI تمیز وابسته است، اغلب نتواند اتصال را درست شناسایی کند. سرور لازم نیست.
-
-**بقیه سایت‌ها (اینستاگرام، X، تلگرام و…):**
+Zyrln با پنهان کردن ترافیک شما *درون چیزی که شبیه یک اتصال عادی به گوگل به نظر می‌رسد* کار می‌کند. سه بخش وجود دارد که هرکدام **کلید مخفی مخصوص به خود** را دارند. درست فهمیدن این سه بخش و دو کلید، کل نکته‌ی راه‌اندازی این سیستم است — بقیه‌ی کار فقط دنبال کردن مراحل است.
 
 ```
-دستگاه شما → زیرلن → Google Apps Script → رله‌ی خروجی شما → سایت واقعی
+دستگاه شما → کلاینت Zyrln → Google Apps Script → رله‌ی خروجی شما → اینترنت
 ```
 
-اتصالات TLS دستگاه شما به سمت محدوده‌ی IP خود گوگل می‌رود؛ فقط هدر رمزنگاری‌شده‌ی `Host` — که برای DPI دیده نمی‌شود — واقعاً به دیپلوی Apps Script شما اشاره می‌کند. از دید یک سانسورچی، این ترافیک از استفاده‌ی شخصی از Google Docs قابل تشخیص نیست. Apps Script سپس آن را به رله خروجی شما (VPS یا Cloudflare) می‌فرستد که به مقصد واقعی وصل می‌شود.
+**چرا کار می‌کند:** اتصالات TLS دستگاه شما به سمت محدوده‌ی IP خود گوگل می‌رود. فقط هدر رمزنگاری‌شده‌ی `Host`، که برای DPI دیده نمی‌شود، واقعاً به دیپلوی Apps Script شما اشاره می‌کند. از دید یک سانسورچی، این ترافیک از استفاده‌ی شخصی از Google Docs قابل تشخیص نیست.
 
-ترافیک رله/تونل کلاینت **باید** از Apps Script عبور کند (هرگز اپ را مستقیم به URL مربوط به VPS/Worker وصل نکن). خروجی فقط از سمت گوگل صدا زده می‌شود.
+**ترتیب راه‌اندازی:** ابتدا کلاینت را راه‌اندازی کنید (تا هر دو کلید را در دست داشته باشید)، سپس رله‌ی خروجی (که به یکی از آن کلیدها نیاز دارد)، و در آخر Apps Script (که به آدرس داده‌شده توسط رله‌ی خروجی، به‌علاوه‌ی هر دو کلید نیاز دارد). انجام این کار به این ترتیب یعنی هرگز مجبور نیستید برگردید و مقداری را که هنوز نداشتید دوباره جای‌گذاری کنید.
 
----
+### دو بخشی که راه‌اندازی می‌کنید
 
-## فقط سرویس‌های گوگل (جیمیل، درایو، مپس)
-
-**بدون سرور. بدون راه‌اندازی رله.**
-
-1. از [Releases](https://github.com/ajavadinezhad/zyrln/releases) برای پلتفرم خودت دانلود کن
-2. اجرا کن — GUI در مرورگر باز می‌شود
-   - **ویندوز:** روی `.exe` دوبار کلیک
-   - **لینوکس / macOS:** با `-gui` اجرا کن:
-     ```bash
-     ./zyrln-VERSION-linux-amd64 -gui          # Linux
-     ./zyrln-VERSION-darwin-arm64 -gui         # macOS Apple Silicon
-     ./zyrln-VERSION-darwin-amd64 -gui         # macOS Intel
-     ```
-3. دکمه **برق** در نوار بالا → حالت مستقیم (Direct Mode)
-4. پروکسی HTTP مرورگر: `127.0.0.1:8085`
-
-حالت مستقیم برای سرویس‌های گوگلی که SNI-filtered هستند اما IP-blocked نیستند کار می‌کند. پخش یوتیوب و دانلود پلی‌استور معمولاً به رله کامل نیاز دارند. بسته به ISP و شهر فرق می‌کند.
-
----
-
-## دسترسی کامل (اینستاگرام، توییتر، تلگرام، …)
-
-راه‌اندازی زنجیره رله حدود ۱۵ دقیقه.
-
-مراحل را به‌ترتیب دنبال کنید: کلاینت ابتدا کلیدهای شما را می‌سازد، رله‌ی خروجی به یکی از آن‌ها نیاز دارد، و Apps Script به آدرس رله‌ی خروجی به‌علاوه‌ی هر دو کلید نیاز دارد. انجام این کار به همین ترتیب یعنی هرگز مجبور نیستید برگردید و مقداری را که هنوز نداشتید دوباره جای‌گذاری کنید.
-
-### چی نیاز دارم
-
-| | چی | هزینه |
+| بخش | چه کاری انجام می‌دهد | کجا میزبانی می‌شود |
 |---|---|---|
-| ضروری | اکانت گوگل | رایگان |
-| ضروری | کلید امنیتی (خودت می‌سازی) | رایگان |
-| یکی از دو | ‏VPS با IP عمومی | ~۵ دلار/ماه |
-| یا | Cloudflare Worker | رایگان — [راه‌اندازی](cloudflare-setup.md) |
+| **رله‌ی خروجی (Exit relay)** | «درِ پشتی». درخواست‌های ارسال‌شده را دریافت کرده و واقعاً وب‌سایت مقصد را واکشی می‌کند. | VPS خودتان، **یا** یک Cloudflare Worker رایگان |
+| **رله‌ی Apps Script** | «درِ جلویی». ترافیک شما را که به شکل ترافیک گوگل درآمده دریافت کرده و به رله‌ی خروجی شما ارسال می‌کند. | سرورهای گوگل (رایگان، از طریق script.google.com) |
 
-### مرحله ۱ — برنامه دسکتاپ
+### دو کلیدی که تولید می‌کنید
 
-1. از [Releases](https://github.com/ajavadinezhad/zyrln/releases) دانلود کن
-2. اجرا — GUI در مرورگر (ویندوز: `.exe`؛ لینوکس/macOS: `-gui` مثل بالا)
-3. ‏**Security** → ساخت و نصب گواهی CA (**فقط دسکتاپ** — برای HTTPS در مسیر رله با MITM)
-4. ‏**Settings** → **Generate Key** → کلید را برای Apps Script کپی کن
+این همان بخشی است که دستورالعمل‌های اصلی آن را با هم قاطی کرده بودند. **دو رمز جداگانه و مستقل** وجود دارد:
 
-**پروکسی مرورگر:**
-
-| مرورگر | تنظیم |
-|---|---|
-| Chrome / Edge | Manual proxy → `127.0.0.1:8085` |
-| Firefox | ‏Manual HTTP proxy → `127.0.0.1` پورت `8085` |
-| کل سیستم | SOCKS5 → `127.0.0.1:1080` |
-
-**گواهی CA (فقط رله دسکتاپ):**
-
-- Chrome/Edge: Settings → Privacy → Security → Manage certificates → Authorities → Import `zyrln-ca.pem`
-- Firefox: Settings → Privacy & Security → Certificates → Authorities → Import
-
-### مرحله ۲ — رله خروجی
-
-رله خروجی سایت‌های واقعی را باز می‌کند. یکی را انتخاب کن — Cloudflare ساده‌تر و رایگان است؛ VPS کنترل بیشتری روی اینکه چه کسی متادیتای مقصد ترافیک شما را می‌بیند به شما می‌دهد.
-
-#### گزینه الف — Cloudflare Worker (رایگان)
-
-[راه‌اندازی Cloudflare Worker](cloudflare-setup.md) — دیپلوی از `relay/deploy/cloudflare/`.
-
-#### گزینه ب — VPS
-
-‏VPS لینوکس (amd64 یا arm64)، IP عمومی، پورت **8787** باز، SSH با `user@host` و `sudo`.
-
-1. ‏**`zyrln-VERSION-vps.zip`** را از [Releases](https://github.com/ajavadinezhad/zyrln/releases) بگیر و از حالت فشرده خارج کن
-2. `./install-vps-relay.sh user@YOUR_VPS_IP` را اجرا کن  
-   `ZYRLN_RELAY_KEY=secret` یا `ZYRLN_RELAY_KEY=auto` — همان مقدار `EXIT_RELAY_KEY` در Apps Script
-3. در `Code.gs`: `EXIT_RELAY_URL = "http://YOUR_VPS_IP:8787/relay"` و `EXIT_RELAY_KEY` مطابق VPS
-
-تست: `curl -s http://YOUR_VPS_IP:8787/healthz` → `ok`
-
-### مرحله ۳ — Apps Script
-
-درب ورودی روی سرورهای گوگل.
-
-#### دو کلید
-
-دو رمز جداگانه و مستقل — قاطی کردن آن‌ها رایج‌ترین اشتباه راه‌اندازی است. اپ فقط کلید ۱ را می‌خواهد.
-
-| | کلید ۱ — کلاینت | کلید ۲ — exit |
+| کلید | هدف | استفاده‌شده توسط |
 |---|---|---|
-| هدف | ثابت می‌کند *دستگاه شما* مجاز به استفاده از *Apps Script* شماست | ثابت می‌کند *Apps Script* شما مجاز به استفاده از *رله‌ی خروجی* شماست |
-| مسیر | اپ → Apps Script | ‏Apps Script → VPS یا Cloudflare |
-| در اپ | بله (`auth-key`) | خیر |
-| Apps Script | `AUTH_KEY` | `EXIT_RELAY_KEY` |
-| Exit | — | `ZYRLN_RELAY_KEY` |
-| روی سیم | JSON `"k"` | هدر `X-Relay-Key` |
+| **`AUTH_KEY`** (کلید کلاینت) | ثابت می‌کند *دستگاه شما* مجاز به استفاده از *Apps Script* شماست. مانع از این می‌شود که افراد ناشناس آدرس Apps Script شما را پیدا کرده و آن را به‌عنوان یک پراکسی باز استفاده کنند. | یک‌بار در Apps Script تنظیم می‌شود؛ یک‌بار در تنظیمات کلاینت شما |
+| **`EXIT_RELAY_KEY`** (کلید رله) | ثابت می‌کند *Apps Script شما* مجاز به استفاده از *رله‌ی خروجی VPS* شماست. **فقط در صورتی لازم است که VPS خودتان را اجرا می‌کنید** — اگر از Cloudflare استفاده می‌کنید از آن صرف‌نظر کنید. | یک‌بار در Apps Script تنظیم می‌شود؛ یک‌بار در تنظیمات رله‌ی VPS شما |
 
-کلید ۲ روی VPS و Cloudflare **همان نام** دارد (`ZYRLN_RELAY_KEY`). همان مقدار در `EXIT_RELAY_KEY` (Code.gs) و `ZYRLN_RELAY_KEY` (exit). اگر رله خروجی بدون کلید است، `EXIT_RELAY_KEY` را در Code.gs خالی بگذار.
-
+به‌صورت بصری این‌طور استفاده می‌شوند:
 ```
-App ──key 1──► Apps Script ──key 2──► Cloudflare or VPS
+دستگاه شما → کلاینت Zyrln --[AUTH_KEY]-→ Google Apps Script --[EXIT_RELAY_KEY]-→ رله‌ی خروجی شما → اینترنت
 ```
+هر دو فقط رشته‌های تصادفی هستند که خودتان تولید می‌کنید — کسی آن‌ها را به شما نمی‌دهد و هرگز آن‌ها را به اشتراک نمی‌گذارید.
 
-1. [script.google.com](https://script.google.com) → **New project**
-2. محتوای [`relay/deploy/apps-script/Code.gs`](../../relay/deploy/apps-script/Code.gs) را جای‌گذاری کن
-3. ثابت‌ها را ویرایش کن — **Cloudflare** یا **VPS**، نه هر دو:
+---
 
-**Cloudflare:**
+## پیش‌نیازها
+
+- یک حساب گوگل (برای Apps Script — رایگان)
+- **یا** یک VPS (چند دلار در ماه) **یا** یک حساب رایگان Cloudflare برای رله‌ی خروجی
+- **نیازی به کامپایل نیست.** فایل‌های اجرایی از پیش کامپایل‌شده برای کلاینت و رله‌ی خروجی VPS در صفحه‌ی [Releases](https://github.com/ajavadinezhad/zyrln/releases) برای ویندوز، مک‌اواس و لینوکس موجودند — فقط نسخه‌ی متناسب با سیستم‌عامل خود را دانلود کنید. فقط در صورتی که بخواهید از سورس بسازید به Go نیاز دارید.
+
+---
+
+## مرحله‌ی ۱ — راه‌اندازی کلاینت و تولید کلیدها
+
+۱. فایل اجرایی کلاینت متناسب با سیستم‌عامل خود را از صفحه‌ی [Releases](https://github.com/ajavadinezhad/zyrln/releases) دانلود کرده و در جایی راحت قرار دهید.
+
+۲. **کلید کلاینت** (`AUTH_KEY`) خود را تولید کنید. می‌توانید از خود کلاینت یا از `openssl` استفاده کنید — هر دو یک کلید تصادفی معتبر تولید می‌کنند، هرکدام راحت‌تر بود انتخاب کنید:
+
+   با استفاده از تولیدکننده‌ی داخلی کلاینت:
+   ```
+   ./zyrln -gen-key
+   # مثال (ویندوز): .\zyrln-2.0-pre-5-windows-amd64.exe -gen-key
+   # چیزی شبیه این چاپ می‌شود: OBGdqrZVgSd4GEvTzyeHn2Jf2kERBEcXkyWQq/DoPug=
+   ```
+   یا با استفاده از OpenSSL:
+   ```bash
+   openssl rand -base64 32
+   ```
+
+   اگر روی اندروید هستید، می‌توانید از وب‌سایت [generate-random.org](https://generate-random.org/base64-string) هم استفاده کنید. این سایت کلیدها را از طریق موتور جاوااسکریپت در مرورگر شما تولید می‌کند. مقدار `--byte-count` را روی `32` تنظیم کنید.
+
+   خروجی را در جایی امن کپی کنید — این همان `AUTH_KEY` شماست.
+
+۳. اگر مسیر **VPS** را برای رله‌ی خروجی خود انتخاب کرده‌اید (اگر از Cloudflare استفاده می‌کنید از این مرحله صرف‌نظر کنید)، یک کلید **دوم و متفاوت** را به همان روش تولید کنید — این کلید `EXIT_RELAY_KEY` شما خواهد بود.
+
+حالا هرچه برای پیکربندی دو بخش دیگر لازم دارید را در اختیار دارید. هنوز `config.env` را پر نکنید — چون آدرس Apps Script را تا مرحله‌ی ۳ ندارید. فعلاً هر دو کلید را دم دست نگه دارید.
+
+---
+
+## مرحله‌ی ۲ — راه‌اندازی رله‌ی خروجی («درِ پشتی»)
+
+یکی از این دو گزینه را انتخاب کنید. Cloudflare ساده‌تر و رایگان است؛ VPS کنترل بیشتری روی اینکه چه کسی متادیتای ترافیک شما را می‌بیند به شما می‌دهد.
+
+### گزینه‌ی الف: Cloudflare Worker (ساده‌تر، رایگان)
+
+۱. به [dash.cloudflare.com](https://dash.cloudflare.com) بروید ← **Workers & Pages** ← **Create application** ← **Worker**
+۲. کد پیش‌فرض را با محتوای `relay/cloudflare/worker.js` از این مخزن جایگزین کنید
+۳. روی **Deploy** کلیک کنید
+۴. آدرس Worker را کپی کنید، مثلاً `https://your-worker.your-subdomain.workers.dev` — در مرحله‌ی ۳ به آن نیاز خواهید داشت.
+
+**نکات مصالحه‌ای:** سطح رایگان روزانه ۱۰۰٬۰۰۰ درخواست می‌دهد که برای استفاده‌ی شخصی کاملاً کافی است، اما خودِ Cloudflare می‌تواند متادیتای مقصد ترافیک شما را ببیند. اگر این موضوع برایتان مهم است، از گزینه‌ی VPS استفاده کنید. Cloudflare Worker اصلاً از `EXIT_RELAY_KEY` استفاده نمی‌کند — بعداً آن را خالی بگذارید.
+
+### گزینه‌ی ب: VPS خودتان (کنترل بیشتر)
+
+۱. فایل اجرایی از پیش کامپایل‌شده‌ی رله‌ی خروجی برای لینوکس را از صفحه‌ی [Releases](https://github.com/ajavadinezhad/zyrln/releases) دانلود کنید — نیازی به ساختن چیزی نیست.
+۲. آن را به سرورتان کپی کنید:
+   ```bash
+   scp zyrln-relay-linux-amd64 root@YOUR_VPS:/usr/local/bin/zyrln-relay
+   chmod +x /usr/local/bin/zyrln-relay
+   ```
+۳. روی سرور، فایل `/etc/systemd/system/zyrln-relay.service` را بسازید:
+   ```ini
+   [Unit]
+   Description=Zyrln Exit Relay
+   After=network-online.target
+   Wants=network-online.target
+
+   [Service]
+   Type=simple
+   EnvironmentFile=/etc/zyrln-relay.env
+   ExecStart=/usr/local/bin/zyrln-relay
+   Restart=always
+   RestartSec=3
+
+   [Install]
+   WantedBy=multi-user.target
+   ```
+۴. فایل `/etc/zyrln-relay.env` را بسازید:
+   ```
+   ZYRLN_RELAY_LISTEN=0.0.0.0:8787
+   ZYRLN_RELAY_KEY=your-relay-key-from-step-1
+   ```
+   این `ZYRLN_RELAY_KEY` **باید دقیقاً** با `EXIT_RELAY_KEY`ای که در مرحله‌ی ۳ در Apps Script جای‌گذاری می‌کنید یکی باشد. اگر یکی نباشند، هر درخواستی از Apps Script به VPS شما با خطای `401` مواجه می‌شود.
+۵. سرویس را فعال و اجرا کنید:
+   ```bash
+   systemctl daemon-reload
+   systemctl enable --now zyrln-relay
+   ```
+۶. پورت فایروال را باز کنید (اگر ارائه‌دهنده‌ی شما قوانین فایروال را از طریق داشبورد مدیریت می‌کند، از این مرحله صرف‌نظر کنید):
+   ```bash
+   ufw allow 8787/tcp
+   ```
+۷. قبل از درگیر کردن Apps Script، آن را مستقیماً تست کنید — هر دو بررسی باید موفق شوند:
+   ```bash
+   # بررسی سلامت پایه
+   curl -s http://YOUR_VPS_IP:8787/healthz
+
+   # چرخه‌ی کامل رله
+   curl -X POST http://YOUR_VPS_IP:8787/relay \
+     -H "Content-Type: application/json" \
+     -H "X-Relay-Key: your-relay-key-from-step-1" \
+     -d '{"u":"https://www.gstatic.com/generate_204","m":"GET","h":{},"r":true}'
+   # انتظار: {"s":204,...}
+   ```
+۸. آدرس VPS خود (`http://YOUR_VPS_IP:8787/relay`) را یادداشت کنید — در مرحله‌ی ۳ به آن نیاز خواهید داشت.
+
+---
+
+## مرحله‌ی ۳ — راه‌اندازی رله‌ی Apps Script («درِ جلویی»)
+
+این همان بخشی است که ترافیک شما را شبیه ترافیک گوگل می‌کند. تا این مرحله هر دو کلید و آدرس رله‌ی خروجی خود را دارید، پس این آخرین قطعه‌ی پازل است.
+
+۱. به [script.google.com](https://script.google.com) بروید ← **New project**
+۲. کد جای‌گیرنده (placeholder) را حذف کرده و محتوای `relay/apps-script/Code.gs` از این مخزن را جای‌گذاری کنید
+۳. در بالای فایل، این چهار ثابت را پر کنید:
 
 ```js
-const AUTH_KEY        = "your-key-from-step-1";
-const EXIT_RELAY_URL  = "https://your-worker.your-subdomain.workers.dev";  // no /relay
-const EXIT_TUNNEL_URL = "";
-const EXIT_RELAY_KEY  = "your-exit-key";
+const AUTH_KEY = ""; // AUTH_KEY شما از مرحله‌ی ۱
+const EXIT_RELAY_URL = ""; // برای رله‌ی خروجی Cloudflare: آدرس Worker، بدون /relay. برای رله‌ی خروجی VPS: http://YOUR_VPS_IP:8787/relay
+const EXIT_TUNNEL_URL = ""; // برای رله‌ی خروجی Cloudflare: خالی بگذارید (خودش /tunnel را استخراج می‌کند). برای رله‌ی خروجی VPS: http://YOUR_VPS_IP:8787/tunnel
+const EXIT_RELAY_KEY = ""; // EXIT_RELAY_KEY شما از مرحله‌ی ۱
 ```
 
-**VPS:**
+۴. روی **Deploy → New deployment** کلیک کنید
+   - نوع: **Web app**
+   - Execute as: **Me**
+   - Who has access: **Anyone**
+۵. آدرس دیپلوی که به شما داده می‌شود را کپی کنید — چیزی شبیه این است:
+   ```
+   https://script.google.com/macros/s/AKfycb.../exec
+   ```
+   برای تکمیل پیکربندی کلاینت خود در ادامه به این آدرس نیاز خواهید داشت.
 
-```js
-const AUTH_KEY        = "your-key-from-step-1";
-const EXIT_RELAY_URL  = "http://YOUR_VPS_IP:8787/relay";
-const EXIT_TUNNEL_URL = "http://YOUR_VPS_IP:8787/tunnel";
-const EXIT_RELAY_KEY  = "your-exit-key";
-```
-
-4. **Deploy → New deployment** → Web app → Execute as **Me** → Access **Anyone**
-5. ‏URL را کپی کن: `https://script.google.com/macros/s/AKfycb.../exec`
-
-هر اکانت گوگل حدود ۲۰٬۰۰۰ درخواست رله در روز دارد. برای اطمینان بیشتر چند deployment (اکانت‌های مختلف) را با ویرگول در اپ اضافه کن.
-
-### مرحله ۴ — اتصال (دسکتاپ)
-
-1. **+** → پروفایل جدید
-2. ‏URL Apps Script و کلید را جای‌گذاری کن
-3. **Save** → **Connect**
-
-### مرحله ۵ — اندروید
-
-1. ‏APK را از [Releases](https://github.com/ajavadinezhad/zyrln/releases) نصب کن
-2. افزودن کانفیگ:
-   - ‏**Import Config from Clipboard** (JSON از دسکتاپ **Tools → Mobile Export**، یا share روی گوشی دیگر)، یا
-   - **+** و وارد کردن دستی URL + کلید
-3. روی کانفیگ بزن → **Connect** → اجازه VPN
-4. اختیاری: **Split tunnel** — فقط اپ‌های انتخاب‌شده از زیرلن رد شوند (برای تغییر VPN را قطع کن)
-5. اشتراک کانفیگ: **share** روی هر ردیف → JSON در کلیپبورد
+**هر وقت این ثابت‌ها را بعداً تغییر دادید، باید دوباره دیپلوی کنید:** Deploy → Manage deployments → آیکن مداد → New version → Deploy.
 
 ---
 
-## ساخت از سورس
+## مرحله‌ی ۴ الف — تکمیل پیکربندی کلاینت ویندوز/لینوکس
 
-‏Go 1.25+ لازم است.
+۱. در ریشه‌ی پروژه، فایلی به نام `config.env` بسازید (که از قبل در gitignore است — هرگز آن را کامیت نکنید):
+   ```
+   fronted-appscript-url = https://script.google.com/macros/s/YOUR_ID/exec
+   auth-key              = YOUR_AUTH_KEY_FROM_STEP_1
+   listen                = 127.0.0.1:8085
+   ```
+۲. یک مرجع گواهی محلی (CA) بسازید (یک‌بار انجام می‌شود):
+   ```bash
+   ./zyrln -init-ca
+   ```
+۳. آن گواهی را در مرورگرتان معتبر کنید، تا بتواند سایت‌های HTTPS را به‌صورت شفاف رمزگشایی و رله کند:
+   - **Chrome/Edge:** Settings → Privacy → Security → Manage certificates → Authorities → Import → فایل `certs/zyrln-ca.pem` را انتخاب کنید
+   - **Firefox:** Settings → Privacy & Security → View Certificates → Authorities → Import → فایل `certs/zyrln-ca.pem` را انتخاب کنید
+۴. پراکسی را اجرا کنید:
+   ```bash
+   ./zyrln
+   ```
+۵. تنظیمات پراکسی HTTP و HTTPS مرورگر خود را روی `127.0.0.1:8085` قرار دهید.
+
+### تست کنید
 
 ```bash
-make desktop              # local ./zyrln
-make desktop-release      # dist/ for Linux, Windows, macOS
-make desktop-linux|windows|macos
-make keystore             # once — Android signing key
-make android              # signed release APK
-make proxy                # run proxy from source (needs CA)
-make test
-make vps-relay-bundle     # → dist/zyrln-VERSION-vps.zip
+./zyrln -test
 ```
 
-ساختار پروژه و نکات توسعه: [contributing.md](../contributing.md) (English).
+باید عبارت `relay fetch ok` و `status: 204` را ببینید. اگر ندیدید، به این ترتیب بررسی کنید:
+۱. آیا دیپلوی Apps Script فعال است و دسترسی آن روی «Anyone» تنظیم شده؟
+۲. آیا `EXIT_RELAY_KEY` در Apps Script دقیقاً با `ZYRLN_RELAY_KEY` روی VPS شما یکی است (فقط مسیر VPS)؟
+۳. آیا سرویس رله‌ی VPS در حال اجراست (`systemctl status zyrln-relay`) و پورت فایروال باز است — دوباره با `curl -s http://YOUR_VPS_IP:8787/healthz` بررسی کنید؟
+۴. آیا پس از آخرین تغییر ثابت‌ها، Apps Script را دوباره دیپلوی کردید؟
+
+اگر همه‌چیز درست بود، مرورگری با پراکسی پیکربندی‌شده باز کنید و به یک سایت که معمولاً مسدود است سر بزنید — باید مثل هر صفحه‌ی دیگری بارگذاری شود.
 
 ---
 
-## مشکلات رایج
+## مرحله‌ی ۴ ب — تکمیل پیکربندی کلاینت اندروید
 
-**زنجیره‌ی رله اصلاً وصل نمی‌شود (راه‌اندازی دسترسی کامل)**
+اپلیکیشن اندروید کل زنجیره‌ی رله را مستقیماً روی گوشی شما در حالت Tunnel Mode اجرا می‌کند — نیازی به نصب گواهی نیست. برخلاف کلاینت ویندوز یا لینوکس، این اپ **هیچ فیلدی برای وارد کردن دستی آدرس دیپلوی یا کلید ندارد** — همه‌چیز به‌صورت یک بلوک JSON وارد می‌شود.
 
-به این ترتیب بررسی کن:
+### نصب
 
-1. دیپلوی Apps Script فعال است و دسترسی روی «Anyone» تنظیم شده؟
-2. ‏`EXIT_RELAY_KEY` در Apps Script دقیقاً با `ZYRLN_RELAY_KEY` روی VPS یکی است؟ (Cloudflare از این کلید استفاده نمی‌کند.)
-3. رله‌ی VPS در حال اجراست و پورت فایروال باز است؟ `curl -s http://YOUR_VPS_IP:8787/healthz` → `ok`
-4. بعد از آخرین تغییر ثابت‌ها، Apps Script را دوباره دیپلوی کردی؟ (Deploy → Manage deployments → آیکن مداد → New version → Deploy)
+فایل APK را از صفحه‌ی [Releases](https://github.com/ajavadinezhad/zyrln/releases) دانلود کنید، آن را به گوشی خود منتقل کرده و بازش کنید.
 
-**هیچ سایتی از پروکسی باز نمی‌شود**
+### اجرای اول
 
-- پروکسی روشن است؟ (نشانگر سبز در GUI)
-- پروکسی مرورگر: `127.0.0.1:8085`
-- ‏Diagnostics (دکمه play در Tools)
+۱. **JSON پیکربندی خود را بسازید.** اپ به یک آبجکت JSON با کلید کلاینت شما و یک یا چند آدرس دیپلوی Apps Script نیاز دارد (اگر بیش از یکی دارید، با کاما و بدون فاصله در یک رشته جدا کنید — برای زمانی که چند نسخه از Apps Script را به‌عنوان پشتیبان دیپلوی کرده‌اید مفید است):
+   ```json
+   {
+     "key": "YOUR_AUTH_KEY_FROM_STEP_1",
+     "url": "https://script.google.com/macros/s/DEPLOYMENT_ID_1/exec,https://script.google.com/macros/s/DEPLOYMENT_ID_2/exec"
+   }
+   ```
+   یک پیکربندی تک-دیپلویی فقط یک آدرس در فیلد `url` دارد. اگر کلاینت دسکتاپ را از قبل راه‌اندازی کرده‌اید، می‌توانید این را از طریق رابط گرافیکی هم به‌جای تایپ دستی خروجی بگیرید:
 
-**خطای SSL در HTTPS (فقط دسکتاپ)**
+۲. **آن را وارد کنید** — آن JSON را در کلیپ‌بورد گوشی خود کپی کنید، سپس در اپ روی **Import Config from Clipboard** بزنید. به‌صورت خودکار به فهرست پیکربندی‌های شما اضافه می‌شود (موارد تکراری نادیده گرفته می‌شوند)، و می‌توانید چند مورد وارد کرده و بین آن‌ها جابه‌جا شوید.
 
-- ‏CA نصب یا معتبر نیست — دوباره `certs/zyrln-ca.pem` را import کن
+۳. **اتصال** — روی یکی از پیکربندی‌های فهرست بزنید، و وقتی درخواست شد مجوز VPN را تأیید کنید. نقطه‌ی سبز = متصل. دوباره بزنید تا قطع شود.
 
-**سهمیه Apps Script تمام شد**
-
-- ‏deployment از اکانت‌های دیگر؛ URLها را با ویرگول در اپ بگذار
-
-**یوتیوب باز می‌شود، اینستاگرام نه**
-
-- اینستاگرام IP-blocked است — زنجیره رله کامل لازم است
-- رله خروجی VPS/Cloudflare در حال اجراست؟
-
-‏**X / Discord / ChatGPT** روی **exit Cloudflare Worker**
-
-- ‏Worker به سایت‌های پشت Cloudflare نمی‌رسد — VPS لازم است. [cloudflare-setup.md](cloudflare-setup.md).
+۴. **تست** — کروم را باز کرده و به سایتی که معمولاً مسدود است سر بزنید. اگر خطای SSL دریافت کردید، یعنی گواهی CA هنوز مورد اعتماد نیست — مرحله‌ی ۱ را تکرار کنید.
 
 ---
 
-## امنیت
+## نکات امنیتی
 
-- ‏Apps Script و کلید اختصاصی خودت را deploy کن
-- ‏`config.env`، `certs/` و کلیدها را commit نکن
-- گوگل و ارائه‌دهنده رله خروجی متادیتا (زمان، حجم) را می‌بینند، نه محتوای رمزشده روی مسیر تونل
-- در صورت افشای کلید، آن را عوض کن
-- ‏`certs/zyrln-ca-key.pem` فقط روی دستگاه خودت (دسکتاپ)
+- کلیدهای خودتان را تولید کنید — از مثال‌ها یا کلید فرد دیگری استفاده نکنید
+- در کلاینت‌های ویندوز/لینوکس، کلید خصوصی CA محلی (`certs/zyrln-ca-key.pem`) هرگز نباید به اشتراک گذاشته شود — هرکس آن را داشته باشد می‌تواند ترافیک HTTPS شما را رهگیری کند
+- گوگل و ارائه‌دهنده‌ی VPS/Cloudflare شما همچنان می‌توانند متادیتای اتصال (زمان‌بندی، حجم) را ببینند، حتی اگر نتوانند خودِ محتوا را بخوانند
 
----
+## اعتبارها (Credits)
 
-## اعتبار
-
-Domain-fronting: [denuitt1/mhr-cfw](https://github.com/denuitt1/mhr-cfw). TLS fragmentation: [GFW-knocker](https://github.com/GFW-knocker).
-
-License: MIT — [LICENSE](../../LICENSE).
+تکنیک دومین-فرانتینگی که این پروژه بر پایه‌ی آن ساخته شده — عبور ترافیک از Google Apps Script با یک Cloudflare Worker به‌عنوان رله‌ی خروجی — ریشه در پروژه‌ی [denuitt1/mhr-cfw](https://github.com/denuitt1/mhr-cfw) دارد. این پروژه آن ایده را با یک گزینه‌ی رله‌ی خروجی خوداستقرار روی VPS، بازنویسی کامل به Go، یک اپ VPN اندروید، و پشتیبانی از پراکسی MITM برای HTTPS گسترش می‌دهد.

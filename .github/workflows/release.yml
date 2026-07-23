@@ -1,0 +1,142 @@
+name: Build and Release Multi-Platform Binaries
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-desktop:
+    name: Build Desktop Client (${{ matrix.goos }}/${{ matrix.goarch }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macOS
+          - goos: darwin
+            goarch: amd64
+            goarm: ""
+            output_name: zyrln-darwin-amd64
+          - goos: darwin
+            goarch: arm64
+            goarm: ""
+            output_name: zyrln-darwin-arm64
+
+          # Windows
+          - goos: windows
+            goarch: amd64
+            goarm: ""
+            output_name: zyrln-windows-amd64.exe
+          - goos: windows
+            goarch: arm64
+            goarm: ""
+            output_name: zyrln-windows-arm64.exe
+
+          # Linux (Static binaries work on both glibc & musl/OpenWrt/Alpine)
+          - goos: linux
+            goarch: amd64
+            goarm: ""
+            output_name: zyrln-linux-amd64
+          - goos: linux
+            goarch: 386
+            goarm: ""
+            output_name: zyrln-linux-x86
+          - goos: linux
+            goarch: arm64
+            goarm: ""
+            output_name: zyrln-linux-armv8
+          - goos: linux
+            goarch: arm
+            goarm: "7"
+            output_name: zyrln-linux-armv7
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Go Environment
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Build Binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          GOARM: ${{ matrix.goarm }}
+          CGO_ENABLED: 0
+        run: |
+          mkdir -p dist
+          go build -trimpath -ldflags="-s -w" -o "dist/${{ matrix.output_name }}" ./platforms/desktop/
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.output_name }}
+          path: dist/${{ matrix.output_name }}
+
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Go Environment
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Install Gomobile
+        run: |
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+          gomobile init
+
+      - name: Generate Signing Keystore
+        run: make keystore
+
+      - name: Build Android APK
+        run: |
+          export ANDROID_HOME=$ANDROID_SDK_ROOT
+          make android
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zyrln-android.apk
+          path: dist/*.apk
+
+  release:
+    name: Create GitHub Release
+    needs: [build-desktop, build-android]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets/
+
+      - name: Flatten Artifact Directory Structure
+        run: |
+          mkdir -p final-dist
+          find release-assets/ -type f -exec mv {} final-dist/ \;
+
+      - name: Publish Release Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: final-dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

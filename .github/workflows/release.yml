@@ -6,6 +6,10 @@ on:
       - 'v*'
   workflow_dispatch:
 
+# Grants permission to create releases and push tags via GITHUB_TOKEN
+permissions:
+  contents: write
+
 jobs:
   build-desktop:
     name: Build Desktop Client (${{ matrix.goos }}/${{ matrix.goarch }})
@@ -122,19 +126,18 @@ jobs:
     name: Create GitHub Release
     needs: [build-desktop, build-android]
     runs-on: ubuntu-latest
-    # Removed the 'if' condition so it will always run, even on manual triggers
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
       - name: Read VERSION file
         run: |
-          # Read the raw contents of the file
-          RAW_VERSION=$(cat VERSION)
+          # Trim whitespace and remove any leading 'v' if it already exists
+          RAW_VERSION=$(cat VERSION | tr -d '[:space:]')
+          CLEAN_VERSION=${RAW_VERSION#v}
           
-          # Optional: If your VERSION file is just "1.0.0", this prepends a "v" to make it "v1.0.0".
-          # If your file already has the "v", change the right side to just $RAW_VERSION
-          echo "TAG_NAME=v$RAW_VERSION" >> $GITHUB_ENV
+          # Always output clean 'vX.Y.Z' tag format
+          echo "TAG_NAME=v$CLEAN_VERSION" >> $GITHUB_ENV
 
       - name: Download All Artifacts
         uses: actions/download-artifact@v4

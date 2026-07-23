@@ -1,0 +1,251 @@
+name: Build and Release Multi-Platform Binaries
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-binaries:
+    name: Build (${{ matrix.binary_name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ==========================================
+          # DESKTOP CLIENT (./platforms/desktop/)
+          # ==========================================
+          # macOS
+          - goos: darwin
+            goarch: amd64
+            goarm: ""
+            binary_name: zyrln-darwin-amd64
+            package_path: platforms/desktop
+            archive_format: zip
+
+          - goos: darwin
+            goarch: arm64
+            goarm: ""
+            binary_name: zyrln-darwin-arm64
+            package_path: platforms/desktop
+            archive_format: zip
+
+          # Windows
+          - goos: windows
+            goarch: amd64
+            goarm: ""
+            binary_name: zyrln-windows-amd64.exe
+            package_path: platforms/desktop
+            archive_format: zip
+
+          - goos: windows
+            goarch: arm64
+            goarm: ""
+            binary_name: zyrln-windows-arm64.exe
+            package_path: platforms/desktop
+            archive_format: zip
+
+          # Linux (Statically linked for glibc and musl/Alpine/OpenWrt)
+          - goos: linux
+            goarch: amd64
+            goarm: ""
+            binary_name: zyrln-linux-amd64
+            package_path: platforms/desktop
+            archive_format: tar.gz
+
+          - goos: linux
+            goarch: 386
+            goarm: ""
+            binary_name: zyrln-linux-x86
+            package_path: platforms/desktop
+            archive_format: tar.gz
+
+          - goos: linux
+            goarch: arm64
+            goarm: ""
+            binary_name: zyrln-linux-armv8
+            package_path: platforms/desktop
+            archive_format: tar.gz
+
+          - goos: linux
+            goarch: arm
+            goarm: "7"
+            binary_name: zyrln-linux-armv7
+            package_path: platforms/desktop
+            archive_format: tar.gz
+
+          # ==========================================
+          # EXIT RELAY (./relay/exit/)
+          # ==========================================
+          # macOS
+          - goos: darwin
+            goarch: amd64
+            goarm: ""
+            binary_name: zyrln-relay-darwin-amd64
+            package_path: relay/exit
+            archive_format: zip
+
+          - goos: darwin
+            goarch: arm64
+            goarm: ""
+            binary_name: zyrln-relay-darwin-arm64
+            package_path: relay/exit
+            archive_format: zip
+
+          # Windows
+          - goos: windows
+            goarch: amd64
+            goarm: ""
+            binary_name: zyrln-relay-windows-amd64.exe
+            package_path: relay/exit
+            archive_format: zip
+
+          - goos: windows
+            goarch: arm64
+            goarm: ""
+            binary_name: zyrln-relay-windows-arm64.exe
+            package_path: relay/exit
+            archive_format: zip
+
+          # Linux
+          - goos: linux
+            goarch: amd64
+            goarm: ""
+            binary_name: zyrln-relay-linux-amd64
+            package_path: relay/exit
+            archive_format: tar.gz
+
+          - goos: linux
+            goarch: 386
+            goarm: ""
+            binary_name: zyrln-relay-linux-x86
+            package_path: relay/exit
+            archive_format: tar.gz
+
+          - goos: linux
+            goarch: arm64
+            goarm: ""
+            binary_name: zyrln-relay-linux-armv8
+            package_path: relay/exit
+            archive_format: tar.gz
+
+          - goos: linux
+            goarch: arm
+            goarm: "7"
+            binary_name: zyrln-relay-linux-armv7
+            package_path: relay/exit
+            archive_format: tar.gz
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Go Environment
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Build and Compress Binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          GOARM: ${{ matrix.goarm }}
+          CGO_ENABLED: 0
+        run: |
+          mkdir -p build_tmp dist
+          
+          # 1. Cross-compile executable
+          go build -trimpath -ldflags="-s -w" -o "build_tmp/${{ matrix.binary_name }}" ./${{ matrix.package_path }}/
+          
+          # 2. Compress binary based on OS format requirement
+          cd build_tmp
+          if [ "${{ matrix.archive_format }}" = "tar.gz" ]; then
+            tar -czf "../dist/${{ matrix.binary_name }}.tar.gz" "${{ matrix.binary_name }}"
+          else
+            zip -q "../dist/${{ matrix.binary_name }}.zip" "${{ matrix.binary_name }}"
+          fi
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.binary_name }}.${{ matrix.archive_format }}
+          path: dist/*
+
+  build-android:
+    name: Build Universal Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Go Environment
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Install Gomobile
+        run: |
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+          gomobile init
+
+      - name: Generate Signing Keystore
+        run: make keystore
+
+      - name: Build Android APK
+        run: |
+          export ANDROID_HOME=$ANDROID_SDK_ROOT
+          make android
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zyrln-android.apk
+          path: dist/*.apk
+
+  release:
+    name: Create GitHub Release
+    needs: [build-binaries, build-android]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Read VERSION file
+        run: |
+          RAW_VERSION=$(cat VERSION | tr -d '[:space:]')
+          CLEAN_VERSION=${RAW_VERSION#v}
+          echo "TAG_NAME=v$CLEAN_VERSION" >> $GITHUB_ENV
+
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets/
+
+      - name: Flatten Artifact Directory Structure
+        run: |
+          mkdir -p final-dist
+          find release-assets/ -type f -exec mv {} final-dist/ \;
+
+      - name: Publish Release Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          name: Release ${{ env.TAG_NAME }}
+          files: final-dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

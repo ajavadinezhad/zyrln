@@ -118,12 +118,24 @@ jobs:
           name: zyrln-android.apk
           path: dist/*.apk
 
-  release:
+release:
     name: Create GitHub Release
     needs: [build-desktop, build-android]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    # Removed the 'if' condition so it will always run, even on manual triggers
     steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Read VERSION file
+        run: |
+          # Read the raw contents of the file
+          RAW_VERSION=$(cat VERSION)
+          
+          # Optional: If your VERSION file is just "1.0.0", this prepends a "v" to make it "v1.0.0".
+          # If your file already has the "v", change the right side to just $RAW_VERSION
+          echo "TAG_NAME=v$RAW_VERSION" >> $GITHUB_ENV
+
       - name: Download All Artifacts
         uses: actions/download-artifact@v4
         with:
@@ -137,6 +149,8 @@ jobs:
       - name: Publish Release Assets
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.TAG_NAME }}
+          name: Release ${{ env.TAG_NAME }}
           files: final-dist/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

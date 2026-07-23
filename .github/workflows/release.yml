@@ -118,7 +118,7 @@ jobs:
           name: zyrln-android.apk
           path: dist/*.apk
 
-release:
+  release:
     name: Create GitHub Release
     needs: [build-desktop, build-android]
     runs-on: ubuntu-latest

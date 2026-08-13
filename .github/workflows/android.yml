@@ -24,6 +24,10 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      # The runner image ships an Android SDK, but its cmdline-tools/sdkmanager
+      # aren't on PATH by default — this puts them there and sets ANDROID_HOME.
+      - uses: android-actions/setup-android@v3
+
       - name: Accept Android SDK licenses
         # `yes` keeps writing after sdkmanager stops reading once all licenses
         # are accepted, which SIGPIPEs this step even on success — the real

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"flag"
@@ -86,7 +87,7 @@ func handleRelay(w http.ResponseWriter, r *http.Request, client *http.Client, ke
 		writeJSON(w, http.StatusMethodNotAllowed, relayResponse{Error: "POST required"})
 		return
 	}
-	if strings.TrimSpace(key) != "" && r.Header.Get("X-Relay-Key") != key {
+	if strings.TrimSpace(key) != "" && !constantTimeEqual(r.Header.Get("X-Relay-Key"), key) {
 		writeJSON(w, http.StatusUnauthorized, relayResponse{Error: "unauthorized"})
 		return
 	}
@@ -194,4 +195,10 @@ func envDefault(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+// constantTimeEqual compares the exit relay key without leaking timing info
+// that could help an attacker guess it byte by byte.
+func constantTimeEqual(a, b string) bool {
+	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }

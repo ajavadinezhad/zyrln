@@ -127,6 +127,37 @@ func TestHandleTunnel_Unauthorized(t *testing.T) {
 	}
 }
 
+func TestHandleTunnel_RejectsWrongRelayKey(t *testing.T) {
+	hub := newTunnelHub(time.Minute)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleTunnel(w, r, hub, "secret", time.Second)
+	}))
+	defer srv.Close()
+
+	body, _ := json.Marshal(tunnelRequest{Op: "open", ID: "x", Target: "127.0.0.1:1"})
+	resp := postTunnelWithKey(t, srv.URL, body, "wrong-secret")
+	if resp.Error != "unauthorized" {
+		t.Fatalf("got %+v want unauthorized", resp)
+	}
+}
+
+func TestHandleTunnel_AcceptsCorrectRelayKey(t *testing.T) {
+	echo, echoAddr := startEchoServer(t)
+	defer echo.Close()
+
+	hub := newTunnelHub(time.Minute)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleTunnel(w, r, hub, "secret", time.Second)
+	}))
+	defer srv.Close()
+
+	body, _ := json.Marshal(tunnelRequest{Op: "open", ID: "auth-ok", Target: echoAddr})
+	resp := postTunnelWithKey(t, srv.URL, body, "secret")
+	if !resp.OK || resp.Error != "" {
+		t.Fatalf("open with correct key: %+v", resp)
+	}
+}
+
 func TestHandleTunnel_DuplicateSession(t *testing.T) {
 	echo, echoAddr := startEchoServer(t)
 	defer echo.Close()
@@ -144,6 +175,109 @@ func TestHandleTunnel_DuplicateSession(t *testing.T) {
 	}
 	if resp := postTunnel(t, srv.URL, openBody); resp.Error != "session exists" {
 		t.Fatalf("second open: %+v want session exists", resp)
+	}
+}
+
+func TestHandleTunnel_OpenRejectsBadRequest(t *testing.T) {
+	hub := newTunnelHub(time.Minute)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleTunnel(w, r, hub, "", time.Second)
+	}))
+	defer srv.Close()
+
+	cases := []struct {
+		name string
+		req  tunnelRequest
+	}{
+		{"empty id", tunnelRequest{Op: "open", ID: "", Target: "127.0.0.1:80"}},
+		{"invalid target", tunnelRequest{Op: "open", ID: "x", Target: "not-a-target"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			body, _ := json.Marshal(tc.req)
+			resp := postTunnel(t, srv.URL, body)
+			if resp.Error != "bad request" {
+				t.Fatalf("got %+v want bad request", resp)
+			}
+		})
+	}
+}
+
+func TestHandleTunnel_OpenDialError(t *testing.T) {
+	hub := newTunnelHub(time.Minute)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleTunnel(w, r, hub, "", time.Second)
+	}))
+	defer srv.Close()
+
+	// Nothing listens on 127.0.0.1:1, so the connection is refused — the
+	// dial itself fails, as opposed to being rejected by earlier validation.
+	body, _ := json.Marshal(tunnelRequest{Op: "open", ID: "dial-fail", Target: "127.0.0.1:1"})
+	resp := postTunnel(t, srv.URL, body)
+	if resp.OK || resp.Error == "" {
+		t.Fatalf("got %+v want a dial error", resp)
+	}
+}
+
+func TestHandleTunnel_UnknownSession(t *testing.T) {
+	hub := newTunnelHub(time.Minute)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleTunnel(w, r, hub, "", time.Second)
+	}))
+	defer srv.Close()
+
+	cases := []struct {
+		name string
+		req  tunnelRequest
+	}{
+		{"tx", tunnelRequest{Op: "tx", ID: "no-such-session", Data: base64.StdEncoding.EncodeToString([]byte("x"))}},
+		{"rx", tunnelRequest{Op: "rx", ID: "no-such-session"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			body, _ := json.Marshal(tc.req)
+			resp := postTunnel(t, srv.URL, body)
+			if resp.Error != "unknown session" {
+				t.Fatalf("got %+v want unknown session", resp)
+			}
+		})
+	}
+}
+
+func TestHandleTunnel_TXRejectsBadBase64(t *testing.T) {
+	echo, echoAddr := startEchoServer(t)
+	defer echo.Close()
+
+	hub := newTunnelHub(time.Minute)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleTunnel(w, r, hub, "", time.Second)
+	}))
+	defer srv.Close()
+
+	id := "bad-b64"
+	openBody, _ := json.Marshal(tunnelRequest{Op: "open", ID: id, Target: echoAddr})
+	if resp := postTunnel(t, srv.URL, openBody); !resp.OK {
+		t.Fatalf("open: %+v", resp)
+	}
+
+	txBody, _ := json.Marshal(tunnelRequest{Op: "tx", ID: id, Data: "not valid base64!!"})
+	resp := postTunnel(t, srv.URL, txBody)
+	if resp.Error != "bad base64" {
+		t.Fatalf("got %+v want bad base64", resp)
+	}
+}
+
+func TestHandleTunnel_UnknownOp(t *testing.T) {
+	hub := newTunnelHub(time.Minute)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleTunnel(w, r, hub, "", time.Second)
+	}))
+	defer srv.Close()
+
+	body, _ := json.Marshal(tunnelRequest{Op: "frobnicate", ID: "x"})
+	resp := postTunnel(t, srv.URL, body)
+	if resp.Error != "bad request" {
+		t.Fatalf("got %+v want bad request", resp)
 	}
 }
 
@@ -183,6 +317,27 @@ func postTunnel(t *testing.T, baseURL string, body []byte) tunnelResponse {
 	var resp tunnelResponse
 	if err := json.Unmarshal(raw, &resp); err != nil {
 		t.Fatalf("decode: %v body=%s", err, raw)
+	}
+	return resp
+}
+
+func postTunnelWithKey(t *testing.T, baseURL string, body []byte, key string) tunnelResponse {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(baseURL, "/"), bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("X-Relay-Key", key)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	var resp tunnelResponse
+	if err := json.NewDecoder(res.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
 	}
 	return resp
 }

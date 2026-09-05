@@ -36,6 +36,57 @@ func TestHandleRelay_RequiresRelayKey(t *testing.T) {
 	assertRelayErrorContains(t, w.Body.Bytes(), "unauthorized")
 }
 
+func TestHandleRelay_RejectsWrongRelayKey(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "/relay", strings.NewReader(`{"u":"https://example.com"}`))
+	r.Header.Set("X-Relay-Key", "wrong-secret")
+
+	handleRelay(w, r, http.DefaultClient, "secret", time.Second)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+	assertRelayErrorContains(t, w.Body.Bytes(), "unauthorized")
+}
+
+func TestHandleRelay_AcceptsCorrectRelayKey(t *testing.T) {
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer target.Close()
+
+	payload := relayRequest{URL: target.URL, Method: http.MethodGet}
+	raw, _ := json.Marshal(payload)
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "/relay", bytes.NewReader(raw))
+	r.Header.Set("X-Relay-Key", "secret")
+
+	handleRelay(w, r, target.Client(), "secret", time.Second)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", w.Code, http.StatusOK, w.Body.String())
+	}
+}
+
+func TestConstantTimeEqual(t *testing.T) {
+	cases := []struct {
+		a, b string
+		want bool
+	}{
+		{"secret", "secret", true},
+		{"secret", "Secret", false},
+		{"secret", "secre", false},
+		{"secret", "secretx", false},
+		{"", "", true},
+		{"", "secret", false},
+	}
+	for _, tc := range cases {
+		if got := constantTimeEqual(tc.a, tc.b); got != tc.want {
+			t.Errorf("constantTimeEqual(%q, %q) = %v, want %v", tc.a, tc.b, got, tc.want)
+		}
+	}
+}
+
 func TestHandleRelay_RejectsBadURL(t *testing.T) {
 	cases := []struct {
 		name string
@@ -43,7 +94,9 @@ func TestHandleRelay_RejectsBadURL(t *testing.T) {
 	}{
 		{"missing", `{}`},
 		{"relative", `{"u":"/local/path"}`},
-		{"unsupported scheme", `{"u":"file:///etc/passwd"}`},
+		// A scheme-only URL like "file:///etc/passwd" has an empty Host, so it
+		// never reaches the scheme check below — it needs a real host to do that.
+		{"unsupported scheme", `{"u":"ftp://example.com/file.txt"}`},
 	}
 
 	for _, tc := range cases {

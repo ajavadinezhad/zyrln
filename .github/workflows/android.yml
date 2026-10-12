@@ -50,8 +50,10 @@ jobs:
 
       - name: Install gomobile
         run: |
-          go install golang.org/x/mobile/cmd/gomobile@latest
-          gomobile init
+          # Match the mobile dependency used to build the app; init installs gobind@latest.
+          mobile_version="$(go list -m -f '{{.Version}}' golang.org/x/mobile)"
+          go install "golang.org/x/mobile/cmd/gomobile@${mobile_version}"
+          go install "golang.org/x/mobile/cmd/gobind@${mobile_version}"
 
       # Same command as `make android` — the Kotlin sources import the
       # gomobile-generated `mobile.Mobile` API, so nothing compiles (tests

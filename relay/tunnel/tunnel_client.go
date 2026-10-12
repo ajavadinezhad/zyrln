@@ -1,7 +1,6 @@
 package tunnel
 
 import (
-	"zyrln/relay/core"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
@@ -13,6 +12,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"zyrln/relay/core"
 )
 
 // tunnelKeepaliveInterval is how often we ping Apps Script while the VPN/proxy is up.
@@ -31,22 +31,22 @@ const tunnelKeepaliveDeepEvery = 3
 //
 // TLS to the final target stays end-to-end; no local CA is required.
 type TunnelClient struct {
-	client         atomic.Value // *http.Client
-	appScriptURLs  []string
-	frontDomain    string
-	authKey        string
-	timeout        time.Duration
-	stopCh         chan struct{}
-	stopOnce       sync.Once
-	keepaliveOnce  sync.Once
-	warmOnce       sync.Once
-	warmDone       chan struct{}
-	warmReady      atomic.Bool
-	warmMu         sync.Mutex
-	warmCancel     context.CancelFunc
-	deferKeepalive bool
-	activeBridges  atomic.Int32
-	lastTraffic    atomic.Int64
+	client          atomic.Value // *http.Client
+	appScriptURLs   []string
+	frontDomain     string
+	authKey         string
+	timeout         time.Duration
+	stopCh          chan struct{}
+	stopOnce        sync.Once
+	keepaliveOnce   sync.Once
+	warmOnce        sync.Once
+	warmDone        chan struct{}
+	warmReady       atomic.Bool
+	warmMu          sync.Mutex
+	warmCancel      context.CancelFunc
+	deferKeepalive  bool
+	activeBridges   atomic.Int32
+	lastTraffic     atomic.Int64
 	connectWarmOnce sync.Once
 }
 
@@ -359,7 +359,7 @@ type TunnelSession struct {
 	client   *TunnelClient
 	id       string
 	target   string
-	urlIdx   int
+	urlIdx   atomic.Int64
 	opened   atomic.Bool
 	openSent atomic.Bool
 	closed   atomic.Bool
@@ -383,7 +383,9 @@ func (c *TunnelClient) NewSession(target string) (*TunnelSession, error) {
 			idx = 0
 		}
 	}
-	return &TunnelSession{client: c, id: id, target: target, urlIdx: idx}, nil
+	s := &TunnelSession{client: c, id: id, target: target}
+	s.urlIdx.Store(int64(idx))
+	return s, nil
 }
 
 // OpenSession dials target through the relay tunnel.
@@ -407,7 +409,7 @@ func (c *TunnelClient) openSession(ctx context.Context, s *TunnelSession, target
 		return fmt.Errorf("no Apps Script URLs configured")
 	}
 	req := TunnelRequest{Op: TunnelOpOpen, ID: s.id, Target: target}
-	start := s.urlIdx % n
+	start := int(s.urlIdx.Load()) % n
 	if start < 0 {
 		start = 0
 	}
@@ -416,7 +418,7 @@ func (c *TunnelClient) openSession(ctx context.Context, s *TunnelSession, target
 		idx := (start + i) % n
 		_, err := c.tryTunnelURL(ctx, idx, req)
 		if err == nil {
-			s.urlIdx = idx
+			s.urlIdx.Store(int64(idx))
 			core.ActiveURLIdxStore(int64(idx))
 			return nil
 		}
@@ -512,7 +514,7 @@ func (s *TunnelSession) Exchange(ctx context.Context, ops []TunnelRequest) ([]Tu
 			ops[i].Target = s.target
 		}
 	}
-	raw, err := s.client.roundTripBatchPinned(ctx, s.urlIdx, ops, func(idx int) { s.urlIdx = idx })
+	raw, err := s.client.roundTripBatchPinned(ctx, int(s.urlIdx.Load()), ops, func(idx int) { s.urlIdx.Store(int64(idx)) })
 	if err != nil {
 		if batchErrorNeedsSequential(err) {
 			if resps, seqErr := s.exchangeSequential(ctx, ops); seqErr == nil {
@@ -592,14 +594,14 @@ func (s *TunnelSession) Close(ctx context.Context) {
 	if !s.opened.Load() && !s.openSent.Load() {
 		return
 	}
-	s.client.bestEffortClose(ctx, s.urlIdx, s.id)
+	s.client.bestEffortClose(ctx, int(s.urlIdx.Load()), s.id)
 }
 
 func (s *TunnelSession) cleanupAfterBatchError(ops []TunnelRequest) {
 	for _, op := range ops {
 		if op.Op == TunnelOpOpen {
 			s.openSent.Store(true)
-			s.client.bestEffortClose(context.Background(), s.urlIdx, s.id)
+			s.client.bestEffortClose(context.Background(), int(s.urlIdx.Load()), s.id)
 			return
 		}
 	}
@@ -623,7 +625,7 @@ func (s *TunnelSession) roundTripRaw(ctx context.Context, req TunnelRequest) (Tu
 	if s.closed.Load() {
 		return TunnelResponse{}, fmt.Errorf("tunnel session closed")
 	}
-	return s.client.roundTripPinned(ctx, s.urlIdx, req, func(idx int) { s.urlIdx = idx })
+	return s.client.roundTripPinned(ctx, int(s.urlIdx.Load()), req, func(idx int) { s.urlIdx.Store(int64(idx)) })
 }
 
 func (c *TunnelClient) roundTripPinned(ctx context.Context, startIdx int, req TunnelRequest, onPin func(int)) (TunnelResponse, error) {

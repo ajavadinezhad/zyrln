@@ -145,3 +145,78 @@ func TestRunTunnelBridge_ForwardsRemoteData(t *testing.T) {
 	}
 	_ = clientConn.Close()
 }
+
+func TestRunTunnelBridge_RemoteFailureClosesLocalReader(t *testing.T) {
+	apps := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var env TunnelEnvelope
+		_ = json.NewDecoder(r.Body).Decode(&env)
+		if len(env.Batch) > 0 {
+			_ = json.NewEncoder(w).Encode(TunnelBatchResponse{Results: []TunnelResponse{{Error: "unknown session"}}})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(TunnelResponse{OK: true})
+	}))
+	defer apps.Close()
+	client := NewTunnelClient(apps.Client(), []string{apps.URL}, testFrontDomain(apps), "k", time.Second)
+	defer client.Stop()
+	sess := &TunnelSession{client: client, id: "failure-test", target: "example.com:443"}
+	sess.opened.Store(true)
+	reader, bridge := net.Pipe()
+	defer reader.Close()
+	defer bridge.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	done := make(chan struct{})
+	go func() { RunTunnelBridge(ctx, bridge, sess, sess.target, time.Second); close(done) }()
+	reader.SetReadDeadline(time.Now().Add(time.Second))
+	_, err := reader.Read(make([]byte, 1))
+	if err != io.EOF {
+		t.Fatalf("remote failure must close local reader promptly; got %v", err)
+	}
+	select {
+	case <-done:
+	case <-ctx.Done():
+		t.Fatal("bridge did not finish")
+	}
+}
+
+func TestRunTunnelBridge_CancelUnblocksLocalWrite(t *testing.T) {
+	delivered := make(chan struct{}, 1)
+	apps := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var env TunnelEnvelope
+		_ = json.NewDecoder(r.Body).Decode(&env)
+		if len(env.Batch) > 0 {
+			select {
+			case delivered <- struct{}{}:
+			default:
+			}
+			_ = json.NewEncoder(w).Encode(TunnelBatchResponse{Results: []TunnelResponse{{OK: true, Data: base64.StdEncoding.EncodeToString([]byte("blocked-data"))}}})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(TunnelResponse{OK: true})
+	}))
+	defer apps.Close()
+	client := NewTunnelClient(apps.Client(), []string{apps.URL}, testFrontDomain(apps), "k", time.Second)
+	defer client.Stop()
+	sess := &TunnelSession{client: client, id: "blocked-test", target: "example.com:443"}
+	sess.opened.Store(true)
+	reader, bridge := net.Pipe()
+	defer reader.Close()
+	defer bridge.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan struct{})
+	go func() { RunTunnelBridge(ctx, bridge, sess, sess.target, time.Second); close(done) }()
+	select {
+	case <-delivered:
+	case <-time.After(time.Second):
+		t.Fatal("RX response was not delivered")
+	}
+	// No peer reads: the receive goroutine's local write must not prevent cancellation.
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("cancelled bridge blocked on local write")
+	}
+}

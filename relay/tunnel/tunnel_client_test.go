@@ -132,15 +132,15 @@ func TestTunnelClient_BatchFailoverQuota(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	sess.urlIdx = 0
+	sess.urlIdx.Store(0)
 	_, err = sess.Exchange(context.Background(), []TunnelRequest{
 		{Op: TunnelOpTX, Data: base64.StdEncoding.EncodeToString([]byte("x"))},
 	})
 	if err != nil {
 		t.Fatalf("exchange after quota failover: %v", err)
 	}
-	if sess.urlIdx != 1 {
-		t.Fatalf("urlIdx = %d, want 1 after failover", sess.urlIdx)
+	if sess.urlIdx.Load() != 1 {
+		t.Fatalf("urlIdx = %d, want 1 after failover", sess.urlIdx.Load())
 	}
 	sess.Close(context.Background())
 }

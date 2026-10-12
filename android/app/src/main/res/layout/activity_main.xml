@@ -3,8 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:background="@color/background">
+    android:orientation="vertical">
 
     <!-- Header -->
     <LinearLayout
@@ -14,8 +13,8 @@
         android:gravity="center_vertical"
         android:paddingStart="20dp"
         android:paddingEnd="12dp"
-        android:paddingTop="16dp"
-        android:paddingBottom="16dp">
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp">
 
         <LinearLayout
             android:layout_width="0dp"
@@ -28,7 +27,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/app_name"
-                android:textSize="20sp"
+                android:textSize="18sp"
                 android:textStyle="bold"
                 android:letterSpacing="0.08"
                 android:textColor="@color/title" />
@@ -50,25 +49,30 @@
 
         <androidx.appcompat.widget.AppCompatImageButton
             android:id="@+id/btnTheme"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
+            android:contentDescription="@string/change_theme"
+            android:tooltipText="@string/change_theme"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:src="@drawable/ic_moon"
             android:tint="@color/icon"
-            android:scaleType="center"
-            android:padding="8dp"
-            android:background="@drawable/bg_icon_btn"
+            android:scaleType="centerInside"
+            android:padding="14dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
             android:layout_marginEnd="6dp" />
 
         <TextView
             android:id="@+id/btnLanguage"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:text="FA"
+            android:contentDescription="@string/change_language"
+            android:clickable="true"
+            android:focusable="true"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:text="@string/language_fa"
             android:textSize="13sp"
             android:textStyle="bold"
             android:textColor="@color/icon"
             android:gravity="center"
-            android:background="@drawable/bg_icon_btn" />
+            android:background="?attr/selectableItemBackgroundBorderless" />
     </LinearLayout>
 
     <!-- Divider -->
@@ -84,8 +88,8 @@
         android:orientation="vertical"
         android:paddingStart="16dp"
         android:paddingEnd="16dp"
-        android:paddingTop="16dp"
-        android:paddingBottom="16dp">
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp">
 
         <!-- Status + Connect card -->
         <androidx.cardview.widget.CardView
@@ -99,98 +103,72 @@
             app:strokeColor="@color/border"
             app:strokeWidth="1dp">
 
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:padding="16dp"
-                android:gravity="center_vertical">
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:id="@+id/statusText"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/status_stopped"
-                        android:textSize="15sp"
-                        android:textStyle="bold"
-                        android:textColor="@color/title" />
-
-                    <LinearLayout
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical"
-                        android:layout_marginTop="4dp">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/label_uptime"
-                            android:textSize="12sp"
-                            android:textColor="@color/text_dim" />
-
-                        <TextView
-                            android:id="@+id/uptimeValue"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="6dp"
-                            android:text="00:00:00"
-                            android:textSize="12sp"
-                            android:textDirection="ltr"
-                            android:fontFamily="monospace"
-                            android:textColor="@color/subtitle" />
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:padding="12dp">
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal" android:gravity="center_vertical">
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:orientation="vertical">
+                        <TextView android:id="@+id/statusText" android:layout_width="match_parent"
+                            android:layout_height="wrap_content" android:text="@string/status_stopped"
+                            android:textSize="16sp" android:textStyle="bold" android:textColor="@color/title"
+                            android:accessibilityLiveRegion="polite" />
+                        <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:orientation="horizontal" android:layout_marginTop="4dp">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="@string/label_uptime" android:textSize="12sp" android:textColor="@color/text_dim" />
+                            <TextView android:id="@+id/uptimeValue" android:layout_width="wrap_content"
+                                android:layout_height="wrap_content" android:layout_marginStart="6dp"
+                                android:text="@string/uptime_zero" android:textSize="12sp"
+                                android:textDirection="ltr" android:fontFamily="monospace" android:textColor="@color/subtitle" />
+                        </LinearLayout>
                     </LinearLayout>
-
-                    <TextView
-                        android:id="@+id/pingResult"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="2dp"
-                        android:textSize="11sp"
-                        android:textDirection="ltr"
-                        android:fontFamily="monospace"
-                        android:textColor="@color/primary"
-                        android:visibility="gone" />
+                    <androidx.appcompat.widget.AppCompatImageButton android:id="@+id/btnPing"
+                        android:layout_width="48dp" android:layout_height="48dp" android:src="@drawable/ic_ping"
+                        android:tint="@color/text_dim" android:scaleType="centerInside" android:padding="14dp"
+                        android:contentDescription="@string/test_connection" android:tooltipText="@string/test_connection"
+                        android:background="?attr/selectableItemBackgroundBorderless" android:layout_marginStart="8dp" />
+                    <androidx.appcompat.widget.AppCompatImageButton android:id="@+id/btnDirect"
+                        android:layout_width="48dp" android:layout_height="48dp" android:src="@drawable/ic_direct"
+                        android:tint="@color/text_dim" android:scaleType="centerInside" android:padding="14dp"
+                        android:background="?attr/selectableItemBackgroundBorderless" android:layout_marginStart="8dp" />
                 </LinearLayout>
-
-                <androidx.appcompat.widget.AppCompatImageButton
-                    android:id="@+id/btnPing"
-                    android:layout_width="44dp"
-                    android:layout_height="44dp"
-                    android:src="@drawable/ic_ping"
-                    android:tint="@color/text_dim"
-                    android:scaleType="center"
-                    android:padding="8dp"
-                    android:background="@drawable/bg_icon_btn"
-                    android:layout_marginEnd="8dp" />
-
-                <androidx.appcompat.widget.AppCompatImageButton
-                    android:id="@+id/btnDirect"
-                    android:layout_width="44dp"
-                    android:layout_height="44dp"
-                    android:src="@drawable/ic_direct"
-                    android:tint="@color/text_dim"
-                    android:scaleType="center"
-                    android:padding="8dp"
-                    android:background="@drawable/bg_icon_btn"
-                    android:layout_marginEnd="8dp" />
-
-                <androidx.appcompat.widget.AppCompatImageButton
-                    android:id="@+id/btnConnect"
-                    android:layout_width="44dp"
-                    android:layout_height="44dp"
-                    android:src="@drawable/ic_connect"
-                    android:scaleType="center"
-                    android:padding="8dp"
-                    android:background="@drawable/bg_icon_btn" />
+                <TextView android:id="@+id/modeHint" android:layout_width="match_parent"
+                    android:layout_height="wrap_content" android:layout_marginTop="12dp"
+                    android:textSize="13sp" android:textColor="@color/subtitle" />
+                <TextView android:id="@+id/pingResult" android:layout_width="match_parent"
+                    android:layout_height="wrap_content" android:layout_marginTop="6dp" android:textSize="12sp"
+                    android:textDirection="ltr" android:fontFamily="monospace" android:textColor="@color/primary"
+                    android:accessibilityLiveRegion="polite" android:visibility="gone" />
+                <TextView android:id="@+id/relayNotice" android:layout_width="match_parent"
+                    android:layout_height="wrap_content" android:layout_marginTop="8dp"
+                    android:textSize="13sp" android:textColor="@color/accent_error"
+                    android:accessibilityLiveRegion="polite" android:visibility="gone" />
+                <com.google.android.material.button.MaterialButton android:id="@+id/btnConnect"
+                    style="@style/Btn.Connect" android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:minHeight="48dp" android:layout_marginTop="8dp" android:text="@string/connect_action"
+                    app:icon="@drawable/ic_connect" app:iconGravity="textStart" app:iconTint="@android:color/white" />
             </LinearLayout>
         </androidx.cardview.widget.CardView>
+
+            <LinearLayout android:id="@+id/profileActions" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical">
+                <com.google.android.material.button.MaterialButton android:id="@+id/btnImportConfig"
+                    style="@style/Btn.Secondary" android:layout_width="0dp" android:layout_weight="1"
+                    android:layout_height="wrap_content" android:minHeight="52dp"
+                    android:text="@string/btn_import_config" android:textSize="13sp"
+                    android:paddingStart="8dp" android:paddingEnd="8dp" />
+                <com.google.android.material.button.MaterialButton android:id="@+id/btnManualEntry"
+                    style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="0dp"
+                    android:layout_weight="1" android:layout_height="wrap_content" android:minHeight="52dp"
+                    android:text="@string/btn_enter_manually" android:textSize="13sp"
+                    android:textAllCaps="false" android:textColor="@color/primary"
+                    android:paddingStart="8dp" android:paddingEnd="8dp" />
+            </LinearLayout>
+
+        <TextView android:id="@+id/profileHeading" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:layout_marginBottom="8dp"
+            android:textSize="13sp" android:textStyle="bold" android:textColor="@color/subtitle" />
 
         <!-- Middle zone: config list OR empty state OR live log — weight fills remaining space -->
         <FrameLayout
@@ -271,13 +249,15 @@
 
                         <androidx.appcompat.widget.AppCompatImageButton
                             android:id="@+id/btnShareLog"
-                            android:layout_width="36dp"
-                            android:layout_height="36dp"
+                            android:contentDescription="@string/share_log"
+                            android:tooltipText="@string/share_log"
+                            android:layout_width="48dp"
+                            android:layout_height="48dp"
                             android:src="@drawable/ic_share"
                             android:tint="@color/text_dim"
                             android:scaleType="center"
                             android:padding="8dp"
-                            android:background="@drawable/bg_icon_btn" />
+                            android:background="?attr/selectableItemBackgroundBorderless" />
                     </LinearLayout>
 
                     <!-- Divider -->
@@ -321,17 +301,11 @@
             android:orientation="vertical">
 
             <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnImportConfig"
-                style="@style/Btn.Connect"
-                android:layout_width="match_parent"
-                android:layout_height="52dp"
-                android:text="@string/btn_import_config" />
-
-            <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnSplitTunnel"
                 style="@style/Btn.Secondary"
                 android:layout_width="match_parent"
-                android:layout_height="48dp"
+                android:layout_height="wrap_content"
+                android:minHeight="48dp"
                 android:layout_marginTop="8dp"
                 android:text="@string/btn_split_tunnel" />
 

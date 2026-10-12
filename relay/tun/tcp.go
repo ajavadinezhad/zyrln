@@ -17,8 +17,8 @@ import (
 
 // tcpMSS is the max TCP payload per TUN frame (MTU 1500 − IP − TCP headers).
 const (
-	tcpMSS           = 1400
-	maxPendingBytes  = 64 * 1024
+	tcpMSS          = 1400
+	maxPendingBytes = 64 * 1024
 )
 
 type flowKey struct {
@@ -36,6 +36,9 @@ type tcpFlow struct {
 	key          flowKey
 	engine       *Engine
 	clientSeq    uint32
+	recvSeq      uint32
+	clientFIN    bool
+	writeReady   chan struct{}
 	synSeq       uint32
 	ourSeq       uint32
 	synAckSent   bool
@@ -72,11 +75,13 @@ func (e *Engine) handleTCP(ip ipv4Packet, seg tcpSegment) {
 	if flow == nil && isSYN {
 		synSeq := randomISN()
 		flow = &tcpFlow{
-			key:       key,
-			engine:    e,
-			clientSeq: seg.seq + 1,
-			synSeq:    synSeq,
-			ourSeq:    synSeq,
+			key:        key,
+			engine:     e,
+			clientSeq:  seg.seq + 1,
+			recvSeq:    seg.seq + 1,
+			writeReady: make(chan struct{}, 1),
+			synSeq:     synSeq,
+			ourSeq:     synSeq,
 		}
 		e.flows[key] = flow
 		e.mu.Unlock()
@@ -183,22 +188,78 @@ func (f *tcpFlow) completeConnect(clientSYN uint32) {
 		f.synSeq, clientSYN+1, tcpFlagSYN|tcpFlagACK, nil)
 	f.synAckSent = true
 	f.ourSeq = f.synSeq + 1
-	f.flushPendingLocked()
+	go f.pumpClient()
 }
 
-func (f *tcpFlow) flushPendingLocked() {
-	if f.backend == nil || len(f.pending) == 0 {
-		return
+// pumpClient owns backend writes. Never block the TUN reader or hold the
+// flow mutex during socket I/O: shutdown must be able to close that socket.
+func (f *tcpFlow) pumpClient() {
+	for {
+		f.mu.Lock()
+		if f.closed {
+			f.mu.Unlock()
+			return
+		}
+		data := f.pending
+		f.pending = nil
+		conn := f.backend
+		fin := f.clientFIN
+		f.mu.Unlock()
+		if len(data) > 0 {
+			_ = conn.SetWriteDeadline(time.Now().Add(f.engine.cfg.timeout()))
+			n, err := conn.Write(data)
+			if err == nil && n != len(data) {
+				err = io.ErrShortWrite
+			}
+			if err != nil {
+				f.mu.Lock()
+				if !f.closed {
+					f.engine.sendTCP(f.key.dst, f.key.src, f.key.dstPort, f.key.srcPort,
+						f.ourSeq, f.clientSeq, tcpFlagRST|tcpFlagACK, nil)
+					f.closeLocked()
+				}
+				f.mu.Unlock()
+				f.removeFromEngine()
+				return
+			}
+			f.mu.Lock()
+			if f.closed {
+				f.mu.Unlock()
+				return
+			}
+			f.clientSeq += uint32(len(data))
+			f.engine.sendTCP(f.key.dst, f.key.src, f.key.dstPort, f.key.srcPort,
+				f.ourSeq, f.clientSeq, tcpFlagACK, nil)
+			f.mu.Unlock()
+		}
+		if fin {
+			f.mu.Lock()
+			if !f.closed {
+				f.clientSeq++
+				f.engine.sendTCP(f.key.dst, f.key.src, f.key.dstPort, f.key.srcPort,
+					f.ourSeq, f.clientSeq, tcpFlagFIN|tcpFlagACK, nil)
+				f.ourSeq++
+				f.closeLocked()
+			}
+			f.mu.Unlock()
+			f.removeFromEngine()
+			return
+		}
+		if len(data) == 0 {
+			select {
+			case <-f.writeReady:
+			case <-f.engine.ctx.Done():
+				return
+			}
+		}
 	}
-	if _, err := f.backend.Write(f.pending); err != nil {
-		f.closeLocked()
-		f.removeFromEngine()
-		return
+}
+
+func (f *tcpFlow) wakeWriterLocked() {
+	select {
+	case f.writeReady <- struct{}{}:
+	default:
 	}
-	f.clientSeq += uint32(len(f.pending))
-	f.pending = nil
-	f.engine.sendTCP(f.key.dst, f.key.src, f.key.dstPort, f.key.srcPort,
-		f.ourSeq, f.clientSeq, tcpFlagACK, nil)
 }
 
 func (f *tcpFlow) handleSegment(seg tcpSegment) {
@@ -210,6 +271,7 @@ func (f *tcpFlow) handleSegment(seg tcpSegment) {
 
 	if seg.flags&tcpFlagSYN != 0 && seg.flags&tcpFlagACK == 0 {
 		f.clientSeq = seg.seq + 1
+		f.recvSeq = seg.seq + 1
 		if f.synAckSent {
 			f.engine.sendTCP(f.key.dst, f.key.src, f.key.dstPort, f.key.srcPort,
 				f.synSeq, f.clientSeq, tcpFlagSYN|tcpFlagACK, nil)
@@ -218,43 +280,27 @@ func (f *tcpFlow) handleSegment(seg tcpSegment) {
 	}
 
 	if len(seg.payload) > 0 {
-		if seg.seq != f.clientSeq {
+		if f.clientFIN || seg.seq != f.recvSeq {
 			if seg.seq+uint32(len(seg.payload)) <= f.clientSeq {
 				f.engine.sendTCP(f.key.dst, f.key.src, f.key.dstPort, f.key.srcPort,
 					f.ourSeq, f.clientSeq, tcpFlagACK, nil)
 			}
 			return
 		}
-		if f.backend == nil {
-			if len(f.pending)+len(seg.payload) > maxPendingBytes {
-				f.closeLocked()
-				f.removeFromEngine()
-				return
-			}
-			f.pending = append(f.pending, seg.payload...)
+		// Leave excess data unacknowledged for TCP retransmission, rather than
+		// allocating an unbounded queue or blocking unrelated connections.
+		if len(f.pending)+len(seg.payload) > maxPendingBytes {
 			return
 		}
-		if _, err := f.backend.Write(seg.payload); err != nil {
-			if !f.closed && !isPipeClosed(err) {
-				log.Logf("error", "tun write %s: %v", f.key.target(), err)
-			}
-			f.closeLocked()
-			f.removeFromEngine()
-			return
-		}
-		f.clientSeq += uint32(len(seg.payload))
-		f.engine.sendTCP(f.key.dst, f.key.src, f.key.dstPort, f.key.srcPort,
-			f.ourSeq, f.clientSeq, tcpFlagACK, nil)
+		f.pending = append(f.pending, seg.payload...)
+		f.recvSeq += uint32(len(seg.payload))
+		f.wakeWriterLocked()
+	}
+	if seg.flags&tcpFlagFIN != 0 && !f.clientFIN && seg.seq+uint32(len(seg.payload)) == f.recvSeq {
+		f.clientFIN = true
+		f.wakeWriterLocked()
 	}
 
-	if seg.flags&tcpFlagFIN != 0 {
-		f.clientSeq++
-		f.engine.sendTCP(f.key.dst, f.key.src, f.key.dstPort, f.key.srcPort,
-			f.ourSeq, f.clientSeq, tcpFlagFIN|tcpFlagACK, nil)
-		f.ourSeq++
-		f.closeLocked()
-		f.removeFromEngine()
-	}
 }
 
 func (f *tcpFlow) pumpBackend() {
@@ -318,6 +364,8 @@ func (f *tcpFlow) closeLocked() {
 		return
 	}
 	f.closed = true
+	f.pending = nil
+	f.wakeWriterLocked()
 	if f.bridgeCancel != nil {
 		f.bridgeCancel()
 		f.bridgeCancel = nil

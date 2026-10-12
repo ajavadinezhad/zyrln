@@ -12,10 +12,6 @@
         <item name="android:fontFamily">sans-serif</item>
     </style>
 
-    <style name="CardStyle">
-        <item name="android:background">@color/card_bg</item>
-    </style>
-
     <style name="Dialog.Zyrln" parent="Theme.MaterialComponents.DayNight.Dialog.Alert">
         <item name="android:windowAnimationStyle">@style/Dialog.Zyrln.Animation</item>
         <item name="android:windowBackground">@drawable/bg_dialog</item>

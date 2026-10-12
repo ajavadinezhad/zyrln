@@ -1,5 +1,8 @@
 package com.zyrln.relay
 
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
@@ -49,6 +52,17 @@ class SplitTunnelAppsActivity : AppCompatActivity() {
         }
         binding = ActivitySplitTunnelBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        // Android 15+ enforces edge-to-edge. Earlier versions already fit system bars.
+        if (android.os.Build.VERSION.SDK_INT >= 35) {
+            val initialPadding = intArrayOf(binding.root.paddingLeft, binding.root.paddingTop, binding.root.paddingRight, binding.root.paddingBottom)
+            ViewCompat.setOnApplyWindowInsetsListener(binding.root) { view, insets ->
+                val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+                view.setPadding(initialPadding[0] + bars.left, initialPadding[1] + bars.top, initialPadding[2] + bars.right, initialPadding[3] + bars.bottom)
+                WindowInsetsCompat.CONSUMED
+            }
+            ViewCompat.requestApplyInsets(binding.root)
+        }
+
 
         prefs = getSharedPreferences("config", Context.MODE_PRIVATE)
         mode = SplitTunnelPrefs.normalizeMode(SplitTunnelPrefs.mode(prefs), SplitTunnelPrefs.packages(prefs))

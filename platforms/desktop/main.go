@@ -814,7 +814,36 @@ func saveConfig(path string, values map[string]string) error {
 		}
 		lines = append(lines, fmt.Sprintf("%s = %s", k, strings.TrimSpace(values[k])))
 	}
-	return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0644)
+	return writeDesktopFileAtomic(path, []byte(strings.Join(lines, "\n")))
+}
+
+// Replace persisted data only after the complete new file is written. Readers
+// (including proxy startup) must never observe a truncated configuration.
+func writeDesktopFileAtomic(path string, data []byte) error {
+	mode := os.FileMode(0644)
+	if info, err := os.Stat(path); err == nil {
+		mode = info.Mode().Perm()
+	}
+	file, err := os.CreateTemp(filepath.Dir(path), ".zyrln-save-*")
+	if err != nil {
+		return err
+	}
+	temp := file.Name()
+	defer os.Remove(temp)
+	defer file.Close()
+	if err = file.Chmod(mode); err != nil {
+		return err
+	}
+	if _, err = file.Write(data); err != nil {
+		return err
+	}
+	if err = file.Sync(); err != nil {
+		return err
+	}
+	if err = file.Close(); err != nil {
+		return err
+	}
+	return os.Rename(temp, path)
 }
 
 func profilesPath(configPath string) string {
@@ -841,7 +870,7 @@ func saveProfiles(configPath string, profiles []desktopProfile) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(profilesPath(configPath), append(data, '\n'), 0644)
+	return writeDesktopFileAtomic(profilesPath(configPath), append(data, '\n'))
 }
 
 var globalDesktopConfigKeys = map[string]bool{
@@ -999,7 +1028,11 @@ func newGUIHandler(configPath, caCertPath, caKeyPath string, startProxy guiProxy
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
-			if err := saveConfig(configPath, cfg); err != nil {
+			merged := loadConfig(configPath)
+			for key, value := range cfg {
+				merged[key] = value
+			}
+			if err := saveConfig(configPath, merged); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
@@ -1398,10 +1431,13 @@ func newGUIHandler(configPath, caCertPath, caKeyPath string, startProxy guiProxy
 				return
 			}
 			if req.DirectEnabled != nil {
-				core.SetDirectEnabled(*req.DirectEnabled)
 				cfg := loadConfig(configPath)
 				cfg["direct-enabled"] = fmt.Sprintf("%v", *req.DirectEnabled)
-				_ = saveConfig(configPath, cfg)
+				if err := saveConfig(configPath, cfg); err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				core.SetDirectEnabled(*req.DirectEnabled)
 			}
 			w.WriteHeader(http.StatusOK)
 			return
@@ -1418,7 +1454,17 @@ func newGUIHandler(configPath, caCertPath, caKeyPath string, startProxy guiProxy
 	} else {
 		mux.Handle("/", http.FileServer(http.FS(guiFS)))
 	}
-	return mux
+	// Serialize whole read-modify-write transactions, rather than just file
+	// writes, so profile activation and setting changes preserve each other.
+	var persistenceMu sync.Mutex
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/config", "/api/settings", "/api/profiles", "/api/profiles/activate":
+			persistenceMu.Lock()
+			defer persistenceMu.Unlock()
+		}
+		mux.ServeHTTP(w, r)
+	})
 }
 
 func openBrowser(url string) {

@@ -6,13 +6,10 @@
     <color name="subtitle">#94a3b8</color>
     <color name="icon">#e2e8f0</color>
     <color name="border">#1e2535</color>
-    <color name="dot_active">#10b981</color>
-    <color name="dot_inactive">#334155</color>
     <color name="primary">#4facfe</color>
     <color name="primary_variant">#0f172a</color>
     <color name="accent_success">#10b981</color>
     <color name="accent_error">#ef4444</color>
     <color name="accent">#4facfe</color>
-    <color name="surface">#151b2d</color>
     <color name="text_dim">#94a3b8</color>
 </resources>

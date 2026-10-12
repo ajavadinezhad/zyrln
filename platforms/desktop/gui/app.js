@@ -336,6 +336,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // Config Management
+    let initialConfigLoaded = false;
     async function loadConfig(silent = false) {
         try {
             const response = await fetch('/api/config');
@@ -352,6 +353,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (!silent) showLog(tLog('log.configLoaded'));
             validateInputs();
+            if (!initialConfigLoaded) { profileSelectValue = ""; initialConfigLoaded = true; }
             await loadProfiles();
         } catch (err) {
             showLog(`Error loading config: ${err.message}`, 'error');
@@ -389,7 +391,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderProfiles() {
-        const selected = profileSelectValue;
+        const saved = window.__ZYRLN_STATE__.lastSavedConfig || {};
+        let selected = profileSelectValue;
+        if (!selected) {
+            const savedURLs = saved['fronted-appscript-url'] || '';
+            const match = window.__ZYRLN_STATE__.profiles.find(p =>
+                (p.config?.['fronted-appscript-url'] || '') === savedURLs &&
+                (p.config?.['auth-key'] || '') === (saved['auth-key'] || ''));
+            selected = savedURLs ? (match ? match.id : '__current__') : '__direct__';
+        }
         profileSelectDropdown.innerHTML = '';
 
         // Always show direct-only entry at the top
@@ -397,6 +407,13 @@ document.addEventListener('DOMContentLoaded', () => {
         directLi.dataset.value = '__direct__';
         directLi.textContent = '⚡ ' + t('tool.directMode');
         profileSelectDropdown.appendChild(directLi);
+
+        if (selected === '__current__') {
+            const currentLi = document.createElement('li');
+            currentLi.dataset.value = '__current__';
+            currentLi.textContent = currentLang === 'fa' ? 'تنظیمات فعلی' : 'Current settings';
+            profileSelectDropdown.appendChild(currentLi);
+        }
 
         window.__ZYRLN_STATE__.profiles.forEach(profile => {
             const li = document.createElement('li');
@@ -437,7 +454,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (response.ok) {
                 window.__ZYRLN_STATE__.lastSavedConfig = data;
                 // If a relay profile is selected, sync its stored config so switching away/back doesn't revert edits
-                if (profileSelect.value && profileSelect.value !== '__direct__') {
+                if (profileSelect.value && !['__direct__', '__current__'].includes(profileSelect.value)) {
                     const currentProfile = selectedProfile();
                     const pConfig = { 'fronted-appscript-url': data['fronted-appscript-url'] || '', 'auth-key': data['auth-key'] || '' };
                     await fetch('/api/profiles', {
@@ -1124,7 +1141,7 @@ document.addEventListener('DOMContentLoaded', () => {
         [addProfileBtn, deleteProfileBtn].forEach(el => {
             if (!el) return;
             const needsSelectedProfile = el === deleteProfileBtn;
-            setButtonDisabled(el, isRunning || (needsSelectedProfile && (!profileSelect.value || profileSelect.value === '__direct__')));
+            setButtonDisabled(el, isRunning || (needsSelectedProfile && (!profileSelect.value || ['__direct__', '__current__'].includes(profileSelect.value))));
         });
     }
 
@@ -1152,6 +1169,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (el) el.addEventListener('input', validateInputs);
     });
     profileSelect.addEventListener('change', () => {
+        if (profileSelect.value === '__current__') { loadConfig(true); return; }
         if (window.__ZYRLN_STATE__.activating) return;
         pingResult.textContent = pingResult.dataset.i18n ? t(pingResult.dataset.i18n) : '—';
         pingResult.classList.remove('text-success', 'text-warning', 'text-danger');
@@ -1187,21 +1205,9 @@ document.addEventListener('DOMContentLoaded', () => {
     applyLocalization();
     showLog(t('log.initial'), 'system');
     loadConfig().then(() => {
+        // Page initialization must only reflect saved routing, never change it.
         validateInputs();
-        if (profileSelect.value === '__direct__') {
-            // Ensure direct mode is on when the direct profile is selected at startup
-            fetch('/api/settings', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ directEnabled: true }),
-            }).then(() => {
-                directModeToggle.classList.add('active');
-                directModeToggle.title = 'Direct mode ON — Google bypasses relay';
-            });
-        } else if (profileSelect.value) {
-            // Activate the auto-selected profile silently so config.env matches what's shown
-            activateSelectedProfile(true);
-        }
+        loadDirectMode();
     });
     async function pollProxyLogs() {
         if (!window.__ZYRLN_STATE__.running) return;

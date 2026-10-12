@@ -54,3 +54,8 @@ zyrln-*
 !platforms/desktop/gui/zyrln-icon.png
 coverage.out
 direct_candidate.txt
+
+# Generated local test artifacts
+__pycache__/
+*.py[cod]
+/socket-failure-*.xml

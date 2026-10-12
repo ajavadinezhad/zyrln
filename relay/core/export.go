@@ -44,7 +44,7 @@ func SetOnRequest(f func(method, url string)) { log.OnRequest = f }
 func SetLogFunc(f func(level, msg string))    { log.SetLogFunc(f) }
 func Log(level, format string, args ...any)    { log.Log(level, format, args...) }
 
-func SetSocketProtectFunc(fn func(fd int)) { netdial.SetSocketProtectFunc(fn) }
+func SetSocketProtectFunc(fn func(fd int) error) { netdial.SetSocketProtectFunc(fn) }
 func SetDirectEnabled(v bool)              { route.SetDirectEnabled(v) }
 func GetDirectEnabled() bool               { return route.GetDirectEnabled() }
 func SetCacheDir(dir string)               { route.SetCacheDir(dir) }

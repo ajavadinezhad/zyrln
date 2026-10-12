@@ -5,6 +5,8 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.ProxyInfo
 import android.net.VpnService
 import android.os.Build
@@ -16,12 +18,19 @@ import mobile.Mobile
 class RelayVpnService : VpnService() {
 
     private var vpnInterface: ParcelFileDescriptor? = null
+    private var latestStartId = 0
     @Volatile private var startGeneration = 0
     @Volatile private var stopComplete = false
     private val stopLock = Any()
     private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
 
     companion object {
+        // The Go engine is process-global, so cleanup must remain ordered across service instances.
+        private val lifecycle = java.util.concurrent.Executors.newSingleThreadExecutor()
+        @Volatile var transitioning = false
+            private set
+        @Volatile var starting = false
+            private set
         const val TAG = "RelayVpnService"
         const val ACTION_START = "com.zyrln.relay.START"
         const val ACTION_STOP = "com.zyrln.relay.STOP"
@@ -32,7 +41,11 @@ class RelayVpnService : VpnService() {
         const val EXTRA_KEY = "key"
         const val EXTRA_ERROR = "error"
         const val NOTIF_ID = 1
-        const val CHANNEL_ID = "zyrln_vpn"
+        // Channel importance is fixed at creation and can't be raised in place —
+        // renaming the ID forces a fresh channel at IMPORTANCE_DEFAULT for
+        // existing installs, which still have "zyrln_vpn" stuck at LOW.
+        const val CHANNEL_ID = "zyrln_vpn_v2"
+        private const val OLD_CHANNEL_ID = "zyrln_vpn"
         private const val PROXY_PORT = 8085
         private const val VPN_ADDRESS = "10.99.0.2"
         private const val VPN_PREFIX = 24
@@ -40,6 +53,7 @@ class RelayVpnService : VpnService() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        latestStartId = startId
         if (intent?.action == ACTION_STOP) {
             stopRelay()
             return START_NOT_STICKY
@@ -51,22 +65,54 @@ class RelayVpnService : VpnService() {
         val key = intent.getStringExtra(EXTRA_KEY) ?: return START_NOT_STICKY
 
         startGeneration++
-        if (Mobile.isRunning()) {
-            Mobile.setSocketProtector(null)
-            Mobile.stop()
-            vpnInterface?.close()
-            vpnInterface = null
-        }
 
         startForeground(NOTIF_ID, buildNotification(url.isEmpty()))
         val gen = startGeneration
-        val vpnService = this
-        Mobile.setSocketProtector(object : mobile.SocketProtector {
-            override fun protect(p0: Long): Boolean = vpnService.protect(p0.toInt())
-        })
-        Thread {
-            startRelay(url, key, gen)
-        }.start()
+        starting = true
+        transitioning = true
+        lifecycle.execute {
+            try {
+                if (gen != startGeneration) return@execute
+                if (Mobile.isRunning()) {
+                    Mobile.setHostResolver(null)
+                    Mobile.setSocketProtector(null)
+                    Mobile.stop()
+                    vpnInterface?.close()
+                    vpnInterface = null
+                }
+
+                val vpnService = this
+                Mobile.setSocketProtector(object : mobile.SocketProtector {
+                    override fun protect(p0: Long): Boolean = vpnService.protect(p0.toInt())
+                })
+                val connectivity = getSystemService(ConnectivityManager::class.java)
+                Mobile.setHostResolver(object : mobile.HostResolver {
+                    override fun resolve(host: String): String {
+                        val networks = connectivity.allNetworks.filter { network ->
+                            connectivity.getNetworkCapabilities(network)?.let { caps ->
+                                caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                                    !caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+                            } == true
+                        }
+                        for (network in networks) {
+                            try {
+                                val addresses = network.getAllByName(host)
+                                if (addresses.isNotEmpty()) return addresses.joinToString("\n") { it.hostAddress.orEmpty() }
+                            } catch (failure: java.net.UnknownHostException) {
+                                Log.w(TAG, "Underlying DNS lookup failed for $host: ${failure.message}")
+                            }
+                        }
+                        Log.w(TAG, "No underlying network resolved $host")
+                        return ""
+                    }
+                })
+                startRelay(url, key, gen)
+            } catch (failure: Exception) {
+                failStart(getString(R.string.error_relay_start_failed, failure.message.orEmpty()), gen)
+            } finally {
+                if (gen == startGeneration) { starting = false; transitioning = false }
+            }
+        }
         return START_STICKY
     }
 
@@ -87,6 +133,7 @@ class RelayVpnService : VpnService() {
         }
         Log.i(TAG, "relay started on 127.0.0.1:$PROXY_PORT (directOnly=${url.isEmpty()})")
         if (generation != startGeneration) {
+            Mobile.setHostResolver(null)
             Mobile.setSocketProtector(null)
             Mobile.stop()
             return
@@ -101,7 +148,10 @@ class RelayVpnService : VpnService() {
                 .addRoute("0.0.0.0", 0)
                 .addDnsServer("8.8.8.8")
                 .addDnsServer("1.1.1.1")
-                .setHttpProxy(ProxyInfo.buildDirectProxy("127.0.0.1", PROXY_PORT))
+            // Android 9 uses the TUN forwarder; the optional proxy hint starts at Android 10.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                builder.setHttpProxy(ProxyInfo.buildDirectProxy("127.0.0.1", PROXY_PORT))
+            }
             applySplitTunnel(builder)
             vpnInterface = builder.establish()
             if (vpnInterface == null) {
@@ -109,6 +159,7 @@ class RelayVpnService : VpnService() {
                 return
             }
             if (generation != startGeneration) {
+                Mobile.setHostResolver(null)
                 Mobile.setSocketProtector(null)
                 Mobile.stop()
                 vpnInterface?.close()
@@ -126,34 +177,34 @@ class RelayVpnService : VpnService() {
                 "TUN forwarder active fd=${vpnInterface!!.fd} routes=0.0.0.0/0 proxy=127.0.0.1:$PROXY_PORT"
             )
             if (generation != startGeneration) {
+                Mobile.setHostResolver(null)
                 Mobile.setSocketProtector(null)
                 Mobile.stop()
                 vpnInterface?.close()
                 vpnInterface = null
                 return
             }
-            sendBroadcast(Intent(ACTION_STARTED))
+            sendBroadcast(Intent(ACTION_STARTED).setPackage(packageName))
         } catch (e: Exception) {
-            Log.e(TAG, "VPN establish failed: ${e.message}")
-            Mobile.setSocketProtector(null)
-            Mobile.stop()
-            vpnInterface?.close()
-            vpnInterface = null
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            stopSelf()
+            failStart(getString(R.string.error_relay_start_failed, e.message.orEmpty()), generation)
         }
     }
 
     private fun failStart(message: String, generation: Int) {
         if (generation != startGeneration) return
         Log.e(TAG, message)
+        Mobile.setHostResolver(null)
         Mobile.setSocketProtector(null)
         Mobile.stop()
         vpnInterface?.close()
         vpnInterface = null
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        sendBroadcast(Intent(ACTION_ERROR).putExtra(EXTRA_ERROR, message))
-        stopSelf()
+
+        mainHandler.post {
+            if (generation != startGeneration) return@post
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            sendBroadcast(Intent(ACTION_ERROR).setPackage(packageName).putExtra(EXTRA_ERROR, message))
+            stopSelfResult(latestStartId)
+        }
     }
 
     private fun stopRelay() {
@@ -163,7 +214,11 @@ class RelayVpnService : VpnService() {
         }
         startGeneration++
         Log.i(TAG, "stopping relay")
-        Thread {
+        val generation = startGeneration
+        starting = false
+        transitioning = true
+        lifecycle.execute {
+            Mobile.setHostResolver(null)
             Mobile.setSocketProtector(null)
             Mobile.stop()
             synchronized(stopLock) {
@@ -171,23 +226,33 @@ class RelayVpnService : VpnService() {
                 vpnInterface = null
             }
             mainHandler.post {
+                if (generation != startGeneration) return@post
+                transitioning = false
                 stopForeground(STOP_FOREGROUND_REMOVE)
-                sendBroadcast(Intent(ACTION_STOPPED))
-                stopSelf()
+                sendBroadcast(Intent(ACTION_STOPPED).setPackage(packageName))
+                stopSelfResult(latestStartId)
             }
-        }.start()
+        }
+    }
+
+    override fun onRevoke() {
+        // Android may invoke revocation off the main thread.
+        mainHandler.post { stopRelay() }
     }
 
     override fun onDestroy() {
-        synchronized(stopLock) {
-            if (!stopComplete) {
-                stopComplete = true
-                Mobile.setSocketProtector(null)
-                Mobile.stop()
-                vpnInterface?.close()
-                vpnInterface = null
-            }
+        startGeneration++
+        starting = false
+        transitioning = true
+        lifecycle.execute {
+            Mobile.setHostResolver(null)
+            Mobile.setSocketProtector(null)
+            Mobile.stop()
+            vpnInterface?.close()
+            vpnInterface = null
         }
+        transitioning = false
+
         super.onDestroy()
     }
 
@@ -253,13 +318,13 @@ class RelayVpnService : VpnService() {
     }
 
     private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                getString(R.string.channel_name_vpn),
-                NotificationManager.IMPORTANCE_LOW
-            )
-            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
-        }
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.deleteNotificationChannel(OLD_CHANNEL_ID)
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            getString(R.string.channel_name_vpn),
+            NotificationManager.IMPORTANCE_DEFAULT
+        )
+        manager.createNotificationChannel(channel)
     }
 }

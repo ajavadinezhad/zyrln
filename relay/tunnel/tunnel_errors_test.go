@@ -102,3 +102,21 @@ func TestNormalizeHostPort(t *testing.T) {
 		t.Fatalf("empty = %q", got)
 	}
 }
+
+func TestTunnelHTMLQuotaClassification(t *testing.T) {
+	cases := []struct{ body, want string }{
+		{"<html>Service invoked too many times for one day: urlfetch.</html>", "Apps Script quota exceeded"},
+		{"<html>Quota exceeded</html>", "Apps Script quota exceeded"},
+		{"<html>Service invoked too many times: UrlFetch.</html>", "Apps Script quota exceeded"},
+		{"<html>Limit exceeded: URLFetch URL Length.</html>", "Apps Script returned HTML instead of JSON"},
+		{"<html>Service Unavailable</html>", "Apps Script returned HTML instead of JSON"},
+		{"<html>Sign in to continue</html>", "Apps Script returned HTML instead of JSON"},
+		{"<html>Service invoked too many times in a short time</html>", "Apps Script returned HTML instead of JSON"},
+	}
+	for _, c := range cases {
+		retry, err := tunnelBodyShouldRetry([]byte(c.body))
+		if !retry || err == nil || err.Error() != c.want {
+			t.Errorf("%q: retry=%v err=%v", c.body, retry, err)
+		}
+	}
+}

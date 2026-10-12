@@ -76,7 +76,7 @@ func NewHTTPClient(timeout time.Duration) *http.Client {
 		Timeout: timeout,
 		Transport: &http.Transport{
 			TLSClientConfig:     &tls.Config{MinVersion: tls.VersionTLS12},
-			DialContext:         dialer.DialContext,
+			DialContext:         netdial.DialContext(dialer),
 			MaxIdleConns:        128,
 			MaxIdleConnsPerHost: 32,
 			IdleConnTimeout:     120 * time.Second,
@@ -226,8 +226,8 @@ func NewCoalescer(client *http.Client, appScriptURLs []string, frontDomain, auth
 		timeout:       timeout,
 		window:        3 * time.Millisecond,
 		maxBatch:      20,
-		ch:     make(chan *coalescerItem, 512),
-		stopCh: make(chan struct{}),
+		ch:            make(chan *coalescerItem, 512),
+		stopCh:        make(chan struct{}),
 	}
 	go c.run()
 	go c.keepaliveLoop()

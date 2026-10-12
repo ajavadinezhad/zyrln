@@ -1,6 +1,5 @@
 plugins {
     id 'com.android.application'
-    id 'org.jetbrains.kotlin.android'
 }
 
 def keystorePropertiesFile = rootProject.file("keystore.properties")
@@ -15,12 +14,13 @@ def appVersionCode = repoRoot.toPath().resolve("VERSION_CODE").toFile().text.tri
 
 android {
     namespace 'com.zyrln.relay'
-    compileSdk 34
+    compileSdk 37
 
     defaultConfig {
         applicationId "com.zyrln.relay"
-        minSdk 29
-        targetSdk 34
+        minSdk 28
+        targetSdk 37
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         versionCode appVersionCode
         versionName appVersionName
         ndk {
@@ -42,6 +42,10 @@ android {
     buildTypes {
         debug {
             applicationIdSuffix ".debug"
+            // Use native x86_64 code on desktop emulators rather than ARM translation.
+            ndk {
+                abiFilters.add("x86_64")
+            }
         }
         release {
             minifyEnabled true
@@ -52,37 +56,41 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
     }
 
-    kotlinOptions {
-        jvmTarget = '1.8'
-    }
 
     buildFeatures {
         buildConfig true
         viewBinding true
     }
 
-    applicationVariants.all { variant ->
-        variant.outputs.all { output ->
-            def suffix = variant.buildType.name == "debug" ? "-debug" : ""
-            outputFileName = "zyrln-${variant.versionName}${suffix}.apk"
-        }
-    }
 }
 
 dependencies {
     // gomobile-generated AAR — built by `make aar` in the project root
     implementation fileTree(dir: 'libs', include: ['*.aar'])
 
-    implementation 'androidx.core:core-ktx:1.12.0'
-    implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.11.0'
-    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-    implementation 'androidx.lifecycle:lifecycle-service:2.7.0'
+    implementation 'androidx.core:core-ktx:1.19.1'
+    implementation 'androidx.appcompat:appcompat:1.8.0'
+    implementation 'com.google.android.material:material:1.14.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.2.2'
+    implementation 'androidx.lifecycle:lifecycle-service:2.11.0'
+
+    androidTestImplementation 'androidx.test:runner:1.7.0'
+    androidTestImplementation 'androidx.test.ext:junit:1.3.0'
+    androidTestImplementation 'androidx.test.uiautomator:uiautomator:2.4.0'
 
     testImplementation 'junit:junit:4.13.2'
-    testImplementation 'org.json:json:20240303'
+    testImplementation 'org.json:json:20260814'
+}
+
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        variant.outputs.each { output ->
+            def suffix = variant.buildType == "debug" ? "-debug" : ""
+            output.outputFileName.set("zyrln-${appVersionName}${suffix}.apk")
+        }
+    }
 }

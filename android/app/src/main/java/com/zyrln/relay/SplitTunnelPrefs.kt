@@ -1,5 +1,7 @@
 package com.zyrln.relay
 
+import androidx.core.content.edit
+
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import org.json.JSONArray
@@ -20,7 +22,7 @@ object SplitTunnelPrefs {
     fun mode(prefs: SharedPreferences): Int = prefs.getInt(KEY_MODE, MODE_OFF)
 
     fun setMode(prefs: SharedPreferences, mode: Int) {
-        prefs.edit().putInt(KEY_MODE, mode).apply()
+        prefs.edit { putInt(KEY_MODE, mode) }
     }
 
     fun packages(prefs: SharedPreferences): Set<String> {
@@ -41,7 +43,7 @@ object SplitTunnelPrefs {
     fun setPackages(prefs: SharedPreferences, packages: Set<String>) {
         val arr = JSONArray()
         packages.sorted().forEach { arr.put(it) }
-        prefs.edit().putString(KEY_PACKAGES, arr.toString()).apply()
+        prefs.edit { putString(KEY_PACKAGES, arr.toString()) }
     }
 
     /** Drops uninstalled packages; optionally writes the pruned set back to prefs. */

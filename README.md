@@ -161,6 +161,8 @@ Each Google account gets ~20,000 relay calls/day. Add multiple deployments (diff
 
 ### Step 5 — Android
 
+The next build supports Android 9 and newer. Android 9 uses the TCP VPN forwarder without the optional system HTTP proxy hint available on Android 10+.
+
 1. Install APK from [Releases](https://github.com/ajavadinezhad/zyrln/releases)
 2. Add config:
    - **Import Config from Clipboard** (JSON from desktop **Tools → Mobile Export**, or from another phone's share icon), or

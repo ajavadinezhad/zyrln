@@ -128,12 +128,12 @@ android:
 	fi
 	@echo "Building gomobile AAR..."
 	@mkdir -p android/app/libs
-	PATH=$(PATH):$(HOME)/go/bin GOCACHE=$(GOCACHE) gomobile bind \
+	PATH=$(PATH):$(HOME)/go/bin GOCACHE=$(GOCACHE) gomobile bind -ldflags="-extldflags=-Wl,-z,max-page-size=16384" \
 		-target android \
 		-androidapi 21 \
 		-o $(AAR_OUT) \
 		zyrln/platforms/mobile
-	cd android && ./gradlew assembleRelease
+	cd android && ./gradlew --no-daemon assembleRelease lintRelease testDebugUnitTest
 	@mkdir -p $(DIST_DIR)
 	cp $(APK_RELEASE) $(APK_DIST)
 	@echo "APK → $(APK_DIST)"

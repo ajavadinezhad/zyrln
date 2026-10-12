@@ -60,7 +60,7 @@ class ConfigUtilsTest {
     @Test
     fun toExportJson_matchesDesktopFormat() {
         val url = "https://script.google.com/macros/s/AKfycb/exec"
-        val key = "swrkwbMS1X666fjzReip+PbodKcPyDK7Xbk5gRSgRUE="
+        val key = "fixture-only-export-key-not-for-authentication"
         val exported = ConfigUtils.toExportJson(url, key)
         assertEquals("""{"url":"$url","key":"$key"}""", exported)
         assertEquals(-1, exported.indexOf("\\/"))

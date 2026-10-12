@@ -2,9 +2,10 @@
 <resources>
     <string name="app_name">Zyrln</string>
     <string name="btn_import_config">Import from Clipboard</string>
+    <string name="btn_enter_manually">Enter Manually</string>
     <string name="btn_export_config">Export to Clipboard</string>
-    <string name="status_stopped">Stopped</string>
-    <string name="status_running">Running — proxy on 127.0.0.1:8085</string>
+    <string name="status_stopped">Not connected</string>
+    <string name="status_running">VPN active</string>
     <string name="empty_configs">No saved configs yet.\nImport or enter one to get started.</string>
     <string name="vpn_notification_title">Zyrln active</string>
     <string name="vpn_notification_text">Tunnel on 127.0.0.1:8085 — toggle ⚡ for Google direct</string>
@@ -15,12 +16,14 @@
     <string name="error_vpn_permission">VPN permission denied</string>
     <string name="error_relay_start_failed">Relay start failed: %1$s</string>
     <string name="error_relay_start_generic">Relay failed to start</string>
-    <string name="btn_connect">Connect</string>
     <string name="btn_disconnect">Disconnect</string>
     <string name="msg_clipboard_empty">Clipboard is empty</string>
-    <string name="msg_config_saved_connect">Config saved — tap it to connect</string>
+    <string name="msg_config_saved_connect">Profile saved — tap Connect to start</string>
     <string name="msg_already_exists">Already in list</string>
-    <string name="msg_invalid_config">Invalid config. Paste a JSON like {\"url\":\"...\",\"key\":\"...\"}</string>
+    <string name="msg_invalid_config">Invalid config. Paste a JSON like {\"url\":\"https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec\",\"key\":\"YOUR_KEY\"}</string>
+    <string name="dialog_manual_entry_title">Add relay profile</string>
+    <string name="hint_manual_url">Apps Script URL</string>
+    <string name="hint_manual_key">Auth Key</string>
     <string name="msg_export_copied">Config copied — paste on another device with Import</string>
     <string name="dialog_remove_title">Remove Config</string>
     <string name="dialog_remove_active">\"%1$s\" is currently connected. Disconnect and remove it?</string>
@@ -44,7 +47,43 @@
     <string name="split_tunnel_no_apps">No matching apps</string>
     <string name="split_tunnel_reconnect_note">Reconnect VPN to apply split tunnel changes.</string>
     <string name="split_tunnel_summary_off">All apps</string>
-    <string name="split_tunnel_summary_bypass">Bypass %1$d app(s)</string>
-    <string name="split_tunnel_summary_only">Only %1$d app(s)</string>
+    <plurals name="split_tunnel_summary_bypass">
+        <item quantity="one">Bypass %1$d app</item>
+        <item quantity="other">Bypass %1$d apps</item>
+    </plurals>
+    <plurals name="split_tunnel_summary_only">
+        <item quantity="one">Only %1$d app</item>
+        <item quantity="other">Only %1$d apps</item>
+    </plurals>
     <string name="split_tunnel_running_hint">Disconnect to change split tunnel settings</string>
+    <string name="version_label" translatable="false">v%1$s</string>
+    <string name="uptime_format" translatable="false">%1$02d:%2$02d:%3$02d</string>
+    <string name="uptime_zero" translatable="false">00:00:00</string>
+    <string name="language_fa" translatable="false">FA</string>
+    <string name="language_en" translatable="false">EN</string>
+    <string name="direct_profile_label">⚡ %1$s</string>
+    <string name="split_tunnel_button_summary">%1$s · %2$s</string>
+    <string name="local_network_denied">Local network access is disabled. Internet connections can still work.</string>
+    <string name="connect_action">Connect</string>
+    <string name="change_theme">Change appearance</string>
+    <string name="change_language">Change language</string>
+    <string name="test_connection">Test connection</string>
+    <string name="share_log">Share connection log</string>
+    <string name="google_direct_on">Google direct is on</string>
+    <string name="google_direct_off">Google direct is off</string>
+    <string name="mode_direct_hint">Google only. Add a relay profile below to reach other sites and apps.</string>
+    <string name="mode_relay_hint">Relay selected. Tap Connect to start.</string>
+    <string name="mode_relay_connected">VPN is active. Test the connection to check reachability.</string>
+    <string name="manual_setup_hint">Paste the Apps Script URL and auth key from your relay setup.</string>
+    <string name="save_profile">Save profile</string>
+    <string name="required_url">Enter the Apps Script URL</string>
+    <string name="required_key">Enter the auth key</string>
+    <string name="profile_details">Profile details</string>
+    <string name="mode_direct_connected">Google only. Disconnect and add a relay profile to reach other sites and apps.</string>
+    <string name="saved_profiles_heading">Saved profiles (%1$d)</string>
+    <string name="relay_quota_notice">Google relay quota reached. Try a profile from another Google account, or try again later.</string>
+    <string name="relay_unavailable_notice">Google relay unavailable. Check the deployment or try again later.</string>
+    <string name="status_connecting">Connecting…</string>
+    <string name="status_disconnecting">Disconnecting…</string>
+    <string name="relay_quota_unknown">Google quota: remaining amount unavailable</string>
 </resources>

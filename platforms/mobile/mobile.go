@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"zyrln/relay/core"
+	"zyrln/relay/netdial"
 	"zyrln/relay/tun"
 	"zyrln/relay/tunnel"
 )
@@ -321,7 +322,14 @@ func SetSocketProtector(p SocketProtector) {
 		core.SetSocketProtectFunc(nil)
 		return
 	}
-	core.SetSocketProtectFunc(func(fd int) { p.Protect(int64(fd)) })
+	core.SetSocketProtectFunc(func(fd int) error {
+		if !p.Protect(int64(fd)) {
+			err := fmt.Errorf("VPN socket protection failed; connection stopped to prevent a routing loop")
+			emitLog("error", err.Error())
+			return err
+		}
+		return nil
+	})
 }
 
 func stopTUNLocked() {
@@ -355,4 +363,27 @@ func AttachTUN(tunFD int64) string {
 	tunEng = eng
 	emitLog("system", "TUN TCP forwarder started")
 	return ""
+}
+
+// HostResolver is implemented by Android using a non-VPN Network.
+type HostResolver interface{ Resolve(host string) string }
+
+// SetHostResolver binds bridge DNS to the physical network. Pass nil to clear.
+func SetHostResolver(resolver HostResolver) {
+	if resolver == nil {
+		netdial.SetHostResolver(nil)
+		return
+	}
+	netdial.SetHostResolver(func(host string) ([]net.IP, error) {
+		var ips []net.IP
+		for _, value := range strings.Fields(resolver.Resolve(host)) {
+			if ip := net.ParseIP(value); ip != nil {
+				ips = append(ips, ip)
+			}
+		}
+		if len(ips) == 0 {
+			return nil, fmt.Errorf("no addresses returned")
+		}
+		return ips, nil
+	})
 }

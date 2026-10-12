@@ -32,6 +32,13 @@ func tunnelBodyShouldRetry(raw []byte) (retry bool, err error) {
 		return true, fmt.Errorf("empty Apps Script response")
 	}
 	if strings.HasPrefix(trim, "<") {
+		m := strings.ToLower(trim)
+		if strings.Contains(m, "quota exceeded") || strings.Contains(m, "daily quota") ||
+			strings.Contains(m, "service invoked too many times for one day") ||
+			strings.Contains(m, "service invoked too many times: urlfetch") ||
+			strings.Contains(m, "service using too much computer time for one day") {
+			return true, fmt.Errorf("Apps Script quota exceeded")
+		}
 		return true, fmt.Errorf("Apps Script returned HTML instead of JSON")
 	}
 

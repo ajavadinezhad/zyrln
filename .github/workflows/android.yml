@@ -39,7 +39,7 @@ jobs:
         # network failures before giving up for real.
         run: |
           for i in 1 2 3; do
-            sdkmanager "platforms;android-34" "build-tools;34.0.0" "ndk;26.1.10909125" && exit 0
+            sdkmanager "platforms;android-37.0" "build-tools;36.0.0" "ndk;26.1.10909125" && exit 0
             echo "sdkmanager install failed (attempt $i/3), retrying in 15s..." >&2
             sleep 15
           done
@@ -56,8 +56,8 @@ jobs:
       - name: Build gomobile AAR
         run: |
           mkdir -p android/app/libs
-          gomobile bind -target android -androidapi 21 -o android/app/libs/mobile.aar zyrln/platforms/mobile
+          gomobile bind -ldflags="-extldflags=-Wl,-z,max-page-size=16384" -target android -androidapi 21 -o android/app/libs/mobile.aar zyrln/platforms/mobile
 
-      - name: Run Android unit tests
+      - name: Verify Android builds, unit tests and lint
         working-directory: android
-        run: ./gradlew testDebugUnitTest
+        run: ./gradlew --no-daemon assembleDebug assembleRelease testDebugUnitTest lintDebug lintRelease

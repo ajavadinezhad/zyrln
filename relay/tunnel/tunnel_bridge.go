@@ -68,6 +68,11 @@ func RunTunnelBridge(ctx context.Context, local io.ReadWriter, sess *TunnelSessi
 	go runTunnelRXLoop(ctx, local, sess, target, opTimeout, rxFailed, &rxWG)
 	defer func() {
 		cancel()
+		// Close before waiting: RX may be blocked writing to the local pipe.
+		// Also wake its peer so bridge errors cannot become silent TLS timeouts.
+		if closer, ok := local.(io.Closer); ok {
+			_ = closer.Close()
+		}
 		rxWG.Wait()
 	}()
 
@@ -253,10 +258,10 @@ func RunTunnelBridge(ctx context.Context, local io.ReadWriter, sess *TunnelSessi
 				continue
 			}
 			if err := flushTX(); err != nil {
-				stopBridge()
 				if ctx.Err() == nil {
 					core.Log("error", "tunnel flush %s: %v", target, err)
 				}
+				stopBridge()
 				return
 			}
 			continue

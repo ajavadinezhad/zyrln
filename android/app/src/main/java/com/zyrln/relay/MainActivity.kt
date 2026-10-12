@@ -1,5 +1,10 @@
 package com.zyrln.relay
 
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+
+import androidx.core.content.edit
+
 import android.animation.AnimatorInflater
 import android.os.Handler
 import android.os.Looper
@@ -56,6 +61,34 @@ class MainActivity : AppCompatActivity() {
     private var selectedKey: String? = null
     private var directOnlySelected: Boolean = false
     private var userRequestedStop = false
+    private var connectionPending = false
+    private var relayNoticeResource: Int? = null
+
+    private val localNetworkPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (!granted) Toast.makeText(this, R.string.local_network_denied, Toast.LENGTH_LONG).show()
+        prepareVpnConnection()
+    }
+
+    private fun requestConnectionPermissions() {
+        connectionPending = true
+        relayNoticeResource = null
+        binding.relayNotice.visibility = View.GONE
+        refreshList(running = false)
+        if (android.os.Build.VERSION.SDK_INT >= 37 &&
+            prefs.getBoolean("direct_enabled", true) &&
+            ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_LOCAL_NETWORK) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            localNetworkPermissionLauncher.launch(android.Manifest.permission.ACCESS_LOCAL_NETWORK)
+        } else {
+            prepareVpnConnection()
+        }
+    }
+
+    private fun prepareVpnConnection() {
+        val vpnIntent = VpnService.prepare(this)
+        if (vpnIntent != null) vpnPermissionLauncher.launch(vpnIntent) else launchRelayService()
+    }
 
     private val vpnPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -63,16 +96,19 @@ class MainActivity : AppCompatActivity() {
         if (result.resultCode == RESULT_OK) {
             launchRelayService()
         } else {
+            connectionPending = false
+            retainActiveProfileSelection()
             activeUrl = null
             activeKey = null
             Toast.makeText(this, R.string.error_vpn_permission, Toast.LENGTH_SHORT).show()
-            refreshList(running = false)
+            updateUI(running = false)
         }
     }
 
     private val startedReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (userRequestedStop) return
+            connectionPending = false
             userRequestedStop = false
             startUptimeTicker()
             startLogPolling()
@@ -110,7 +146,9 @@ class MainActivity : AppCompatActivity() {
 
     private val stopReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
+            connectionPending = false
             userRequestedStop = false
+            retainActiveProfileSelection()
             activeUrl = null
             activeKey = null
             stopLogPolling()
@@ -121,7 +159,9 @@ class MainActivity : AppCompatActivity() {
 
     private val errorReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
+            connectionPending = false
             userRequestedStop = false
+            retainActiveProfileSelection()
             activeUrl = null
             activeKey = null
             stopLogPolling()
@@ -129,6 +169,7 @@ class MainActivity : AppCompatActivity() {
             updateUI(running = false)
             val message = intent?.getStringExtra(RelayVpnService.EXTRA_ERROR)
                 ?: getString(R.string.error_relay_start_generic)
+            showRelayNotice(message)
             Toast.makeText(this@MainActivity, message, Toast.LENGTH_LONG).show()
         }
     }
@@ -136,19 +177,37 @@ class MainActivity : AppCompatActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putBoolean(STATE_USER_REQUESTED_STOP, userRequestedStop)
+        outState.putBoolean("connection_pending", connectionPending)
+        relayNoticeResource?.let { outState.putInt("relay_notice", it) }
+        outState.putString("selected_url", selectedUrl)
+        outState.putString("selected_key", selectedKey)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         userRequestedStop = savedInstanceState?.getBoolean(STATE_USER_REQUESTED_STOP, false) ?: false
+        connectionPending = savedInstanceState?.getBoolean("connection_pending", false) ?: false
+        relayNoticeResource = savedInstanceState?.getInt("relay_notice", 0)?.takeIf { it != 0 }
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        // Android 15+ enforces edge-to-edge. Earlier versions already fit system bars.
+        if (android.os.Build.VERSION.SDK_INT >= 35) {
+            val initialPadding = intArrayOf(binding.root.paddingLeft, binding.root.paddingTop, binding.root.paddingRight, binding.root.paddingBottom)
+            ViewCompat.setOnApplyWindowInsetsListener(binding.root) { view, insets ->
+                val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+                view.setPadding(initialPadding[0] + bars.left, initialPadding[1] + bars.top, initialPadding[2] + bars.right, initialPadding[3] + bars.bottom)
+                WindowInsetsCompat.CONSUMED
+            }
+            ViewCompat.requestApplyInsets(binding.root)
+        }
+
 
         prefs = getSharedPreferences("config", Context.MODE_PRIVATE)
         Mobile.setCacheDir(filesDir.absolutePath)
-        binding.versionTag.text = "v${BuildConfig.VERSION_NAME}"
+        binding.versionTag.text = getString(R.string.version_label, BuildConfig.VERSION_NAME)
 
         binding.btnImportConfig.setOnClickListener { importConfig() }
+        binding.btnManualEntry.setOnClickListener { manualEntry() }
         binding.btnSplitTunnel.setOnClickListener { openSplitTunnelSettings() }
         binding.btnLanguage.setOnClickListener { toggleLanguage() }
         binding.btnTheme.setOnClickListener { toggleTheme() }
@@ -161,7 +220,7 @@ class MainActivity : AppCompatActivity() {
                 binding.pingResult.text = "…"
                 Thread {
                     val result = Mobile.pingDirect()
-                    runOnUiThread { binding.pingResult.text = result }
+                    runOnUiThread { binding.pingResult.text = result; showRelayNotice(result) }
                 }.start()
                 return@setOnClickListener
             }
@@ -184,7 +243,7 @@ class MainActivity : AppCompatActivity() {
             binding.pingResult.text = "…"
             Thread {
                 val result = Mobile.ping(pingUrl, pingKey)
-                runOnUiThread { binding.pingResult.text = result }
+                runOnUiThread { binding.pingResult.text = result; showRelayNotice(result) }
             }.start()
         }
 
@@ -195,6 +254,10 @@ class MainActivity : AppCompatActivity() {
             AnimatorInflater.loadStateListAnimator(this, R.animator.btn_press)
 
         syncModeFromPrefs()
+        if (savedInstanceState != null && !vpnAppearsRunning()) {
+            selectedUrl = savedInstanceState.getString("selected_url")
+            selectedKey = savedInstanceState.getString("selected_key")
+        }
         applyDirectEnabledFromPrefs()
         val initialRunning = vpnAppearsRunning()
         updateUI(running = initialRunning)
@@ -237,6 +300,9 @@ class MainActivity : AppCompatActivity() {
         androidx.core.content.ContextCompat.registerReceiver(this, startedReceiver, IntentFilter(RelayVpnService.ACTION_STARTED), androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED)
         androidx.core.content.ContextCompat.registerReceiver(this, stopReceiver, IntentFilter(RelayVpnService.ACTION_STOPPED), androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED)
         androidx.core.content.ContextCompat.registerReceiver(this, errorReceiver, IntentFilter(RelayVpnService.ACTION_ERROR), androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED)
+        if (RelayVpnService.starting) connectionPending = true
+        else if (Mobile.isRunning() || VpnService.prepare(this) == null) connectionPending = false
+        if (!RelayVpnService.transitioning && !Mobile.isRunning()) userRequestedStop = false
         syncModeFromPrefs()
         applyDirectEnabledFromPrefs()
         val running = vpnAppearsRunning()
@@ -263,6 +329,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun onConnectClicked() {
+        if (connectionPending || userRequestedStop) return
         if (vpnAppearsRunning()) {
             playMotion(binding.btnConnect, R.anim.motion_soft)
             stopVpn()
@@ -286,14 +353,14 @@ class MainActivity : AppCompatActivity() {
             val h = elapsed / 3_600_000
             val m = (elapsed % 3_600_000) / 60_000
             val s = (elapsed % 60_000) / 1_000
-            binding.uptimeValue.text = "%02d:%02d:%02d".format(h, m, s)
+            binding.uptimeValue.text = getString(R.string.uptime_format, h, m, s)
             uptimeHandler.postDelayed(this, 1_000)
         }
     }
 
     private fun startUptimeTicker() {
         uptimeStart = SystemClock.elapsedRealtime()
-        prefs.edit().putLong("uptime_start_wall", System.currentTimeMillis()).apply()
+        prefs.edit { putLong("uptime_start_wall", System.currentTimeMillis()) }
         uptimeHandler.removeCallbacks(uptimeTick)
         uptimeHandler.post(uptimeTick)
     }
@@ -312,28 +379,31 @@ class MainActivity : AppCompatActivity() {
 
     private fun stopUptimeTicker() {
         uptimeHandler.removeCallbacks(uptimeTick)
-        prefs.edit().remove("uptime_start_wall").apply()
-        binding.uptimeValue.text = "00:00:00"
+        prefs.edit { remove("uptime_start_wall") }
+        binding.uptimeValue.setText(R.string.uptime_zero)
     }
 
     private fun updateUI(running: Boolean) {
         runOnUiThread {
             binding.statusText.setText(if (running) R.string.status_running else R.string.status_stopped)
-            binding.btnConnect.setImageResource(if (running) R.drawable.ic_pause else R.drawable.ic_connect)
+            binding.btnConnect.setIconResource(if (running) R.drawable.ic_pause else R.drawable.ic_connect)
+            binding.btnConnect.setText(if (running) R.string.btn_disconnect else R.string.connect_action)
+            binding.btnConnect.backgroundTintList = ContextCompat.getColorStateList(this,
+                if (running) R.color.accent_error else R.color.accent_success)
 
             val targetColor = ContextCompat.getColor(
-                this, if (running) R.color.accent_error else R.color.accent_success
+                this, android.R.color.white
             )
             if (connectBtnCurrentColor == 0) {
                 connectBtnCurrentColor = targetColor
-                binding.btnConnect.imageTintList = ColorStateList.valueOf(targetColor)
+                binding.btnConnect.iconTint = ColorStateList.valueOf(targetColor)
             } else if (connectBtnCurrentColor != targetColor) {
                 colorAnimator?.cancel()
                 colorAnimator = ValueAnimator.ofObject(ArgbEvaluator(), connectBtnCurrentColor, targetColor).apply {
                     duration = 220
                     addUpdateListener { animator ->
                         val color = animator.animatedValue as Int
-                        binding.btnConnect.imageTintList = ColorStateList.valueOf(color)
+                        binding.btnConnect.iconTint = ColorStateList.valueOf(color)
                     }
                     start()
                 }
@@ -344,8 +414,13 @@ class MainActivity : AppCompatActivity() {
             binding.btnImportConfig.alpha = if (running) 0.5f else 1f
             binding.logCard.visibility = if (running) View.VISIBLE else View.GONE
             binding.bottomActions.visibility = if (running) View.GONE else View.VISIBLE
+            binding.profileActions.visibility = if (running) View.GONE else View.VISIBLE
             if (!running) { binding.logOutput.text = ""; logCache.clear() }
             refreshList(running)
+            relayNoticeResource?.let {
+                binding.relayNotice.setText(it)
+                binding.relayNotice.visibility = View.VISIBLE
+            }
             updateDirectBtn()
             updateSplitTunnelBtn()
         }
@@ -354,7 +429,7 @@ class MainActivity : AppCompatActivity() {
     private fun vpnAppearsRunning(): Boolean = Mobile.isRunning() && !userRequestedStop
 
     private fun openSplitTunnelSettings() {
-        if (vpnAppearsRunning()) {
+        if (connectionPending || userRequestedStop || vpnAppearsRunning()) {
             Toast.makeText(this, R.string.split_tunnel_running_hint, Toast.LENGTH_SHORT).show()
             return
         }
@@ -363,21 +438,20 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateSplitTunnelBtn() {
         val cfg = SplitTunnelPrefs.loadResolved(prefs, packageManager)
-        val summary = SplitTunnelPrefs.summaryResolved(
-            prefs,
-            packageManager,
-            getString(R.string.split_tunnel_summary_off),
-            getString(R.string.split_tunnel_summary_bypass),
-            getString(R.string.split_tunnel_summary_only),
-        )
+        val count = cfg.packages.size
+        val summary = when (cfg.mode) {
+            SplitTunnelPrefs.MODE_BYPASS -> resources.getQuantityString(R.plurals.split_tunnel_summary_bypass, count, count)
+            SplitTunnelPrefs.MODE_ONLY -> resources.getQuantityString(R.plurals.split_tunnel_summary_only, count, count)
+            else -> getString(R.string.split_tunnel_summary_off)
+        }
         binding.btnSplitTunnel.text = if (SplitTunnelPrefs.isActive(cfg)) {
-            "${getString(R.string.btn_split_tunnel)} · $summary"
+            getString(R.string.split_tunnel_button_summary, getString(R.string.btn_split_tunnel), summary)
         } else {
             getString(R.string.btn_split_tunnel)
         }
         val running = vpnAppearsRunning()
-        binding.btnSplitTunnel.isEnabled = !running
-        binding.btnSplitTunnel.alpha = if (running) 0.5f else 1f
+        binding.btnSplitTunnel.isEnabled = !running && !connectionPending && !userRequestedStop
+        binding.btnSplitTunnel.alpha = if (binding.btnSplitTunnel.isEnabled) 1f else 0.5f
     }
 
     private fun toggleLanguage() {
@@ -391,13 +465,13 @@ class MainActivity : AppCompatActivity() {
                 android.content.res.Configuration.UI_MODE_NIGHT_YES
         val nextMode = if (isNight) AppCompatDelegate.MODE_NIGHT_NO else AppCompatDelegate.MODE_NIGHT_YES
         AppCompatDelegate.setDefaultNightMode(nextMode)
-        prefs.edit().putInt("theme_mode", nextMode).apply()
+        prefs.edit { putInt("theme_mode", nextMode) }
         updateThemeButton()
     }
 
     private fun updateLanguageButton() {
         val currentLocale = AppCompatDelegate.getApplicationLocales()[0]?.language ?: Locale.getDefault().language
-        binding.btnLanguage.text = if (currentLocale == "fa") "EN" else "FA"
+        binding.btnLanguage.setText(if (currentLocale == "fa") R.string.language_en else R.string.language_fa)
     }
 
     private fun updateThemeButton() {
@@ -410,11 +484,21 @@ class MainActivity : AppCompatActivity() {
     private fun refreshList(running: Boolean = vpnAppearsRunning()) {
         val configs = loadConfigs()
         binding.configList.removeAllViews()
+        binding.profileHeading.text = getString(R.string.saved_profiles_heading, configs.size)
+        binding.profileHeading.visibility = if (running) View.GONE else View.VISIBLE
 
         // Connect is always enabled — direct mode works without any config
         binding.btnConnect.visibility = View.VISIBLE
-        binding.btnConnect.isEnabled = true
-        binding.btnConnect.alpha = 1f
+        binding.btnConnect.isEnabled = !connectionPending && !userRequestedStop
+        binding.btnConnect.alpha = if (binding.btnConnect.isEnabled) 1f else 0.5f
+        if (connectionPending || userRequestedStop) {
+            val label = if (userRequestedStop) R.string.status_disconnecting else R.string.status_connecting
+            binding.btnConnect.setText(label)
+            binding.statusText.setText(label)
+        }
+        binding.configScroll.isEnabled = !connectionPending && !userRequestedStop
+        binding.btnImportConfig.isEnabled = !running && !connectionPending && !userRequestedStop
+        binding.btnManualEntry.isEnabled = !running && !connectionPending && !userRequestedStop
 
         if (running) {
             binding.configScroll.visibility = View.GONE
@@ -448,14 +532,14 @@ class MainActivity : AppCompatActivity() {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 layoutDirection = View.LAYOUT_DIRECTION_LTR
-                val p = (14 * dp).toInt()
-                setPadding(p, p, p, p)
+                minimumHeight = (48 * dp).toInt()
+                setPadding((12 * dp).toInt(), (8 * dp).toInt(), (8 * dp).toInt(), (8 * dp).toInt())
                 background = ContextCompat.getDrawable(this@MainActivity,
                     if (isSelected) R.drawable.bg_card_selected else R.drawable.bg_card)
             }
             val label = TextView(this).apply {
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                text = "⚡ ${getString(R.string.direct_only_label)}"
+                text = getString(R.string.direct_profile_label, getString(R.string.direct_only_label))
                 textSize = 15f
                 setTextColor(ContextCompat.getColor(this@MainActivity, R.color.title))
                 if (isSelected) setTypeface(null, android.graphics.Typeface.BOLD)
@@ -463,6 +547,7 @@ class MainActivity : AppCompatActivity() {
             row.addView(label)
             card.addView(row)
             row.setOnClickListener {
+                if (connectionPending || userRequestedStop) return@setOnClickListener
                 directOnlySelected = true
                 selectedUrl = null
                 selectedKey = null
@@ -472,8 +557,8 @@ class MainActivity : AppCompatActivity() {
             binding.configList.addView(card)
         }
 
-        val iconButtonSize = (40 * dp).toInt()
-        val iconButtonPadding = (8 * dp).toInt()
+        val iconButtonSize = (48 * dp).toInt()
+        val iconButtonPadding = (12 * dp).toInt()
         val hostnames = configs.map { (url, _) -> configLabel(url) }
 
         configs.forEach { (url, key) ->
@@ -499,8 +584,8 @@ class MainActivity : AppCompatActivity() {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 layoutDirection = View.LAYOUT_DIRECTION_LTR
-                val p = (14 * dp).toInt()
-                setPadding(p, p, p, p)
+                minimumHeight = (48 * dp).toInt()
+                setPadding((12 * dp).toInt(), (8 * dp).toInt(), (8 * dp).toInt(), (8 * dp).toInt())
                 background = ContextCompat.getDrawable(this@MainActivity, rowBg)
             }
 
@@ -523,6 +608,7 @@ class MainActivity : AppCompatActivity() {
             val urlList = url.split(",").map { it.trim() }.filter { it.isNotEmpty() }
             val infoBtn = android.widget.ImageButton(this).apply {
                 visibility = if (urlList.size > 1) View.VISIBLE else View.GONE
+                contentDescription = getString(R.string.profile_details)
                 setImageDrawable(ContextCompat.getDrawable(this@MainActivity, R.drawable.ic_info))
                 background = null
                 imageTintList = ContextCompat.getColorStateList(this@MainActivity, R.color.text_dim)
@@ -538,7 +624,7 @@ class MainActivity : AppCompatActivity() {
                     "${i + 1}. $short"
                 }.joinToString("\n")
                 AlertDialog.Builder(this@MainActivity, R.style.Dialog_Zyrln)
-                    .setTitle(R.string.btn_ok)
+                    .setTitle(R.string.profile_details)
                     .setMessage(lines)
                     .setPositiveButton(R.string.btn_ok, null)
                     .show()
@@ -562,6 +648,7 @@ class MainActivity : AppCompatActivity() {
             val deleteBtn = android.widget.ImageButton(this).apply {
                 layoutParams = LinearLayout.LayoutParams(iconButtonSize, iconButtonSize)
                     .apply { marginStart = (6 * dp).toInt() }
+                contentDescription = getString(R.string.btn_remove)
                 setImageDrawable(ContextCompat.getDrawable(this@MainActivity, R.drawable.ic_delete))
                 background = null
                 imageTintList = ContextCompat.getColorStateList(this@MainActivity, R.color.text_dim)
@@ -576,6 +663,7 @@ class MainActivity : AppCompatActivity() {
             card.addView(row)
 
             card.setOnClickListener {
+                if (connectionPending || userRequestedStop) return@setOnClickListener
                 if (isActive && running) {
                     stopVpn()
                 } else if (!running) {
@@ -586,16 +674,20 @@ class MainActivity : AppCompatActivity() {
                     } else {
                         selectedUrl = url
                         selectedKey = key
+                        relayNoticeResource = null
                         directOnlySelected = false
-                        prefs.edit().putBoolean("direct_only", false).apply()
-                        Mobile.warmupTunnel(url, key)
-                    }
+                        prefs.edit { putBoolean("direct_only", false) }
+                        Thread { Mobile.warmupTunnel(url, key) }.start()
+
+        }
                     refreshList(running = false)
                     updateDirectBtn()
                 }
             }
 
+            deleteBtn.isEnabled = !connectionPending && !userRequestedStop
             deleteBtn.setOnClickListener {
+                if (connectionPending || userRequestedStop) return@setOnClickListener
                 AlertDialog.Builder(this, R.style.Dialog_Zyrln_Destructive)
                     .setTitle(R.string.dialog_remove_title)
                     .setMessage(if (isActive && running)
@@ -631,23 +723,23 @@ class MainActivity : AppCompatActivity() {
             enterAnim.startOffset = (configIndex * 40L).coerceAtMost(120L)
             card.startAnimation(enterAnim)
         }
+        updateDirectBtn()
     }
 
     private fun connectConfig(url: String, key: String) {
-        Mobile.warmupTunnel(url, key)
+        Thread { Mobile.warmupTunnel(url, key) }.start()
         directOnlySelected = false
-        prefs.edit()
-            .putBoolean("direct_only", false)
-            .putString("url", url)
-            .putString("key", key)
-            .apply()
+        prefs.edit {
+            putBoolean("direct_only", false)
+            putString("url", url)
+            putString("key", key)
+        }
         activeUrl = url
         activeKey = key
         selectedUrl = null
         selectedKey = null
         refreshList(running = false)
-        val vpnIntent = VpnService.prepare(this)
-        if (vpnIntent != null) vpnPermissionLauncher.launch(vpnIntent) else launchRelayService()
+        requestConnectionPermissions()
     }
 
     private fun connectDirect() {
@@ -655,15 +747,14 @@ class MainActivity : AppCompatActivity() {
         directOnlySelected = true
         activeUrl = null
         activeKey = null
-        prefs.edit()
-            .putString("url", "")
-            .putString("key", "")
-            .putBoolean("direct_only", true)
-            .putBoolean("direct_enabled", true)
-            .apply()
+        prefs.edit {
+            putString("url", "")
+            putString("key", "")
+            putBoolean("direct_only", true)
+            putBoolean("direct_enabled", true)
+        }
         updateDirectBtn()
-        val vpnIntent = VpnService.prepare(this)
-        if (vpnIntent != null) vpnPermissionLauncher.launch(vpnIntent) else launchRelayService()
+        requestConnectionPermissions()
     }
 
     private fun appendLogBatch(entries: List<Pair<String, String>>) {
@@ -672,13 +763,24 @@ class MainActivity : AppCompatActivity() {
             val scroll = binding.logScroll
             val atBottom = !scroll.canScrollVertically(1)
             val timeFmt = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
-            for ((_, msg) in entries) {
+            for ((level, msg) in entries) {
+                if (level == "error") showRelayNotice(msg)
                 val time = timeFmt.format(java.util.Date())
                 logCache.append('[').append(time).append("] ").append(msg).append('\n')
             }
             trimLogCache()
             binding.logOutput.text = logCache.toString()
             if (atBottom) scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
+        }
+    }
+
+    private fun showRelayNotice(message: String) {
+        RelayNotice.messageResource(message)?.let { notice ->
+            // Keep confirmed exhaustion visible after later generic bridge failures.
+            if (relayNoticeResource != R.string.relay_quota_notice) relayNoticeResource = notice
+            binding.relayNotice.setText(relayNoticeResource!!)
+            binding.relayNotice.setTextColor(ContextCompat.getColor(this, R.color.accent_error))
+            binding.relayNotice.visibility = View.VISIBLE
         }
     }
 
@@ -701,13 +803,15 @@ class MainActivity : AppCompatActivity() {
         if (hasRelay && !prefs.getBoolean("direct_opt_out", false)) {
             // Builds before v1.6 defaulted relay profiles to direct OFF; turn Google bypass on.
             if (!prefs.getBoolean("direct_enabled", true)) {
-                prefs.edit().putBoolean("direct_enabled", true).apply()
-            }
+                prefs.edit { putBoolean("direct_enabled", true) }
+
+        }
         }
         Mobile.setDirectEnabled(prefs.getBoolean("direct_enabled", true))
     }
 
     private fun launchRelayService() {
+        connectionPending = true
         userRequestedStop = false
         applyDirectEnabledFromPrefs()
         val url = prefs.getString("url", "") ?: ""
@@ -723,7 +827,18 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
+    private fun retainActiveProfileSelection() {
+        activeUrl?.let { url ->
+            selectedUrl = url
+            selectedKey = activeKey
+            directOnlySelected = false
+        }
+    }
+
     private fun stopVpn() {
+        if (userRequestedStop) return
+        connectionPending = false
+        retainActiveProfileSelection()
         userRequestedStop = true
         startService(Intent(this, RelayVpnService::class.java).apply { action = RelayVpnService.ACTION_STOP })
         activeUrl = null
@@ -743,7 +858,7 @@ class MainActivity : AppCompatActivity() {
         try {
             val (url, key) = ConfigUtils.parseImportText(rawText)
             if (saveConfig(url, key)) {
-                refreshList()
+                revealSavedConfig(url, key)
                 Thread { Mobile.warmupTunnel(url, key) }.start()
                 playMotion(binding.btnImportConfig, R.anim.motion_confirm)
                 Toast.makeText(this, R.string.msg_config_saved_connect, Toast.LENGTH_SHORT).show()
@@ -756,11 +871,108 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun manualEntry() {
+        val dp = resources.displayMetrics.density
+        val sidePadding = (24 * dp).toInt()
+
+        val urlInput = android.widget.EditText(this).apply {
+            hint = getString(R.string.hint_manual_url)
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI
+            maxLines = 1
+            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.title))
+            setHintTextColor(ContextCompat.getColor(this@MainActivity, R.color.text_dim))
+        }
+        val keyInput = android.widget.EditText(this).apply {
+            hint = getString(R.string.hint_manual_key)
+            maxLines = 1
+            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.title))
+            setHintTextColor(ContextCompat.getColor(this@MainActivity, R.color.text_dim))
+        }
+        urlInput.hint = null
+        keyInput.hint = null
+        urlInput.background = null
+        keyInput.background = null
+        val urlLayout = com.google.android.material.textfield.TextInputLayout(this).apply {
+            hint = getString(R.string.hint_manual_url)
+            isErrorEnabled = true
+            addView(urlInput)
+        }
+        val keyLayout = com.google.android.material.textfield.TextInputLayout(this).apply {
+            hint = getString(R.string.hint_manual_key)
+            isErrorEnabled = true
+            addView(keyInput)
+        }
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(sidePadding, (8 * dp).toInt(), sidePadding, 0)
+            addView(TextView(this@MainActivity).apply {
+                setText(R.string.manual_setup_hint)
+                setTextColor(ContextCompat.getColor(this@MainActivity, R.color.subtitle))
+                textSize = 14f
+                setPadding(0, 0, 0, (12 * dp).toInt())
+            })
+            addView(urlLayout)
+            addView(keyLayout, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = (12 * dp).toInt() })
+        }
+
+        val dialog = AlertDialog.Builder(this, R.style.Dialog_Zyrln)
+            .setTitle(R.string.dialog_manual_entry_title)
+            .setView(container)
+            .setPositiveButton(R.string.save_profile, null)
+            .setNegativeButton(R.string.btn_cancel, null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val url = urlInput.text.toString().trim()
+                val key = keyInput.text.toString().trim()
+                urlLayout.error = if (url.isEmpty()) getString(R.string.required_url) else null
+                keyLayout.error = if (key.isEmpty()) getString(R.string.required_key) else null
+                if (url.isEmpty() || key.isEmpty()) {
+                    if (url.isEmpty()) urlInput.requestFocus() else keyInput.requestFocus()
+                    return@setOnClickListener
+                }
+                if (saveConfig(url, key)) {
+                    revealSavedConfig(url, key)
+                    Thread { Mobile.warmupTunnel(url, key) }.start()
+                    Toast.makeText(this, R.string.msg_config_saved_connect, Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this, R.string.msg_already_exists, Toast.LENGTH_SHORT).show()
+                }
+                dialog.window?.let { androidx.core.view.WindowCompat.getInsetsController(it, urlInput).hide(WindowInsetsCompat.Type.ime()) }
+                dialog.dismiss()
+            }
+        }
+        dialog.show()
+    }
+
+    private fun revealSavedConfig(url: String, key: String) {
+        selectedUrl = url
+        selectedKey = key
+        relayNoticeResource = null
+        directOnlySelected = false
+        prefs.edit { putBoolean("direct_only", false) }
+        refreshList()
+        updateDirectBtn()
+        // Bring the newly added entry into view even when many profiles are saved.
+        binding.configScroll.post {
+            val last = binding.configList.getChildAt(binding.configList.childCount - 1)
+            if (last != null) binding.configScroll.scrollTo(0, last.top)
+        }
+    }
+
     private fun copyConfigToClipboard(url: String, key: String) {
         if (url.isBlank() || key.isBlank()) return
         val json = ConfigUtils.toExportJson(url, key)
         val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Zyrln config", json))
+        val clip = android.content.ClipData.newPlainText("Zyrln config", json)
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            clip.description.extras = android.os.PersistableBundle().apply {
+                putBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE, true)
+            }
+        }
+        clipboard.setPrimaryClip(clip)
         Toast.makeText(this, R.string.msg_export_copied, Toast.LENGTH_SHORT).show()
     }
 
@@ -781,7 +993,7 @@ class MainActivity : AppCompatActivity() {
         val arr = JSONArray()
         existing.forEach { (u, k) -> arr.put(JSONObject().put("url", u).put("key", k)) }
         arr.put(JSONObject().put("url", url).put("key", key))
-        prefs.edit().putString("configs", arr.toString()).apply()
+        prefs.edit { putString("configs", arr.toString()) }
         return true
     }
 
@@ -789,7 +1001,7 @@ class MainActivity : AppCompatActivity() {
         val arr = JSONArray()
         loadConfigs().filter { it.first != url || it.second != key }
             .forEach { (u, k) -> arr.put(JSONObject().put("url", u).put("key", k)) }
-        prefs.edit().putString("configs", arr.toString()).apply()
+        prefs.edit { putString("configs", arr.toString()) }
     }
 
     private fun playMotion(v: View?, animRes: Int) {
@@ -829,34 +1041,50 @@ class MainActivity : AppCompatActivity() {
 
     private fun syncModeFromPrefs() {
         val savedUrl = prefs.getString("url", null)?.takeIf { it.isNotEmpty() }
-        if (vpnAppearsRunning()) {
+        if (vpnAppearsRunning() || connectionPending) {
             activeUrl = savedUrl
             activeKey = if (savedUrl != null) prefs.getString("key", null) else null
         } else {
             activeUrl = null
             activeKey = null
+            if (selectedUrl == null && savedUrl != null &&
+                loadConfigs().any { it.first == savedUrl && it.second == prefs.getString("key", null) }) {
+                selectedUrl = savedUrl
+                selectedKey = prefs.getString("key", null)
+            }
         }
         directOnlySelected = savedUrl == null && prefs.getBoolean("direct_only", DEFAULT_DIRECT_ONLY)
     }
 
     private fun toggleDirectMode() {
         // ⚡ toggles Google direct bypass for relay/tunnel profiles — not the "Direct only" card.
-        if (vpnAppearsRunning() || directOnlySelected) return
+        if (connectionPending || userRequestedStop || vpnAppearsRunning() || directOnlySelected) return
         if (selectedUrl == null && activeUrl == null) return
         val next = !Mobile.isDirectEnabled()
         Mobile.setDirectEnabled(next)
-        prefs.edit()
-            .putBoolean("direct_enabled", next)
-            .putBoolean("direct_opt_out", !next)
-            .apply()
+        prefs.edit {
+            putBoolean("direct_enabled", next)
+            putBoolean("direct_opt_out", !next)
+        }
         updateDirectBtn()
     }
 
     private fun updateDirectBtn() {
+        val hasRelay = selectedUrl != null || activeUrl != null
+        binding.relayNotice.visibility = if (hasRelay && !directOnlySelected) View.VISIBLE else View.GONE
+        binding.relayNotice.setText(relayNoticeResource ?: R.string.relay_quota_unknown)
+        binding.relayNotice.setTextColor(ContextCompat.getColor(this,
+            if (relayNoticeResource == null) R.color.subtitle else R.color.accent_error))
         // Show ⚡ when a relay profile is selected, or direct-only card (status only — disabled).
         val relayContext = selectedUrl != null || activeUrl != null
         val showDirectToggle = directOnlySelected || relayContext
         binding.btnDirect.visibility = if (showDirectToggle) View.VISIBLE else View.GONE
+        binding.modeHint.setText(when {
+            directOnlySelected && vpnAppearsRunning() -> R.string.mode_direct_connected
+            directOnlySelected -> R.string.mode_direct_hint
+            vpnAppearsRunning() -> R.string.mode_relay_connected
+            else -> R.string.mode_relay_hint
+        })
         if (!showDirectToggle) return
         val on = Mobile.isDirectEnabled() || directOnlySelected
         val color = ContextCompat.getColor(
@@ -864,7 +1092,9 @@ class MainActivity : AppCompatActivity() {
             if (on) R.color.accent_success else R.color.text_dim
         )
         binding.btnDirect.imageTintList = ColorStateList.valueOf(color)
+        binding.btnDirect.contentDescription = getString(if (on) R.string.google_direct_on else R.string.google_direct_off)
+        binding.btnDirect.tooltipText = binding.btnDirect.contentDescription
         binding.btnDirect.alpha = 1f
-        binding.btnDirect.isEnabled = !directOnlySelected && !vpnAppearsRunning()
+        binding.btnDirect.isEnabled = !connectionPending && !userRequestedStop && !directOnlySelected && !vpnAppearsRunning()
     }
 }

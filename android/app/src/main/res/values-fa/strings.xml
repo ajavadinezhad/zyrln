@@ -2,9 +2,10 @@
 <resources>
     <string name="app_name">زیرلن</string>
     <string name="btn_import_config">وارد کردن از کلیپ‌بورد</string>
+    <string name="btn_enter_manually">وارد کردن دستی</string>
     <string name="btn_export_config">خروجی به کلیپ‌بورد</string>
-    <string name="status_stopped">متوقف شده</string>
-    <string name="status_running">در حال اجرا — روی 127.0.0.1:8085</string>
+    <string name="status_stopped">متصل نیست</string>
+    <string name="status_running">وی‌پی‌ان فعال</string>
     <string name="empty_configs">هنوز کانفیگی ذخیره نشده است.\nیکی وارد کنید تا شروع کنیم.</string>
     <string name="vpn_notification_title">زیرلن فعال</string>
     <string name="vpn_notification_text">تونل روی 127.0.0.1:8085 — ⚡ برای گوگل مستقیم</string>
@@ -15,12 +16,14 @@
     <string name="error_vpn_permission">اجازه دسترسی به VPN داده نشد</string>
     <string name="error_relay_start_failed">شروع رله ناموفق بود: %1$s</string>
     <string name="error_relay_start_generic">رله شروع نشد</string>
-    <string name="btn_connect">اتصال</string>
     <string name="btn_disconnect">قطع اتصال</string>
     <string name="msg_clipboard_empty">کلیپ‌بورد خالی است</string>
-    <string name="msg_config_saved_connect">تنظیمات ذخیره شد — برای اتصال روی آن بزنید</string>
+    <string name="msg_config_saved_connect">پروفایل ذخیره شد — برای شروع، اتصال را بزنید</string>
     <string name="msg_already_exists">قبلاً اضافه شده است</string>
     <string name="msg_invalid_config">کانفیگ نامعتبر است. فرمت JSON صحیح را وارد کنید.</string>
+    <string name="dialog_manual_entry_title">افزودن پروفایل رله</string>
+    <string name="hint_manual_url">آدرس Apps Script</string>
+    <string name="hint_manual_key">کلید احراز هویت</string>
     <string name="msg_export_copied">کانفیگ کپی شد — در دستگاه دیگر با «وارد کردن» بچسبانید</string>
     <string name="dialog_remove_title">حذف تنظیمات</string>
     <string name="dialog_remove_active">«%1$s» در حال حاضر متصل است. قطع اتصال و حذف شود؟</string>
@@ -44,7 +47,38 @@
     <string name="split_tunnel_no_apps">اپی پیدا نشد</string>
     <string name="split_tunnel_reconnect_note">برای اعمال تغییرات، VPN را دوباره وصل کنید.</string>
     <string name="split_tunnel_summary_off">همه اپ‌ها</string>
-    <string name="split_tunnel_summary_bypass">عبور %1$d اپ</string>
-    <string name="split_tunnel_summary_only">فقط %1$d اپ</string>
+    <plurals name="split_tunnel_summary_bypass">
+        <item quantity="one">عبور %1$d اپ</item>
+        <item quantity="other">عبور %1$d اپ</item>
+    </plurals>
+    <plurals name="split_tunnel_summary_only">
+        <item quantity="one">فقط %1$d اپ</item>
+        <item quantity="other">فقط %1$d اپ</item>
+    </plurals>
     <string name="split_tunnel_running_hint">برای تغییر تنظیمات، ابتدا قطع کنید</string>
+    <string name="direct_profile_label">⚡ %1$s</string>
+    <string name="split_tunnel_button_summary">%1$s · %2$s</string>
+    <string name="local_network_denied">دسترسی به شبکه محلی غیرفعال است. اتصال به اینترنت همچنان ممکن است.</string>
+    <string name="connect_action">اتصال</string>
+    <string name="change_theme">تغییر ظاهر</string>
+    <string name="change_language">تغییر زبان</string>
+    <string name="test_connection">آزمایش اتصال</string>
+    <string name="share_log">اشتراک‌گذاری گزارش اتصال</string>
+    <string name="google_direct_on">اتصال مستقیم گوگل روشن است</string>
+    <string name="google_direct_off">اتصال مستقیم گوگل خاموش است</string>
+    <string name="mode_direct_hint">فقط گوگل. برای دسترسی به سایت‌ها و برنامه‌های دیگر، یک پروفایل رله اضافه کنید.</string>
+    <string name="mode_relay_hint">پروفایل رله انتخاب شده است. برای شروع، اتصال را بزنید.</string>
+    <string name="mode_relay_connected">وی‌پی‌ان فعال است. برای بررسی دسترسی، اتصال را آزمایش کنید.</string>
+    <string name="manual_setup_hint">نشانی Apps Script و کلید احراز هویت را از تنظیمات رله خود وارد کنید.</string>
+    <string name="save_profile">ذخیره پروفایل</string>
+    <string name="required_url">نشانی Apps Script را وارد کنید</string>
+    <string name="required_key">کلید احراز هویت را وارد کنید</string>
+    <string name="profile_details">جزئیات پروفایل</string>
+    <string name="mode_direct_connected">فقط گوگل. برای دسترسی به سایت‌ها و برنامه‌های دیگر، اتصال را قطع کنید و یک پروفایل رله اضافه کنید.</string>
+    <string name="saved_profiles_heading">پروفایل‌های ذخیره‌شده (%1$d)</string>
+    <string name="relay_quota_notice">سهمیهٔ رلهٔ گوگل به پایان رسیده است. نمایه‌ای از حساب گوگل دیگری را امتحان کنید یا بعداً دوباره تلاش کنید.</string>
+    <string name="relay_unavailable_notice">رلهٔ گوگل در دسترس نیست. انتشار را بررسی کنید یا بعداً دوباره تلاش کنید.</string>
+    <string name="status_connecting">در حال اتصال…</string>
+    <string name="status_disconnecting">در حال قطع اتصال…</string>
+    <string name="relay_quota_unknown">سهمیهٔ گوگل: مقدار باقی‌مانده مشخص نیست</string>
 </resources>

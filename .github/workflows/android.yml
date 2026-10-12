@@ -27,6 +27,9 @@ jobs:
       # The runner image ships an Android SDK, but its cmdline-tools/sdkmanager
       # aren't on PATH by default — this puts them there and sets ANDROID_HOME.
       - uses: android-actions/setup-android@v3
+        with:
+          # The retired SDK tools package is no longer available.
+          packages: platform-tools
 
       - name: Accept Android SDK licenses
         # `yes` keeps writing after sdkmanager stops reading once all licenses

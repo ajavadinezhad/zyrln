@@ -242,4 +242,6 @@ Check in order:
 
 Domain-fronting: [denuitt1/mhr-cfw](https://github.com/denuitt1/mhr-cfw). TLS fragmentation: [GFW-knocker](https://github.com/GFW-knocker).
 
+Ahmad Javadi Nezhad's contribution, "Improve Android and desktop reliability, UI, and test coverage," was selected for the [XERJ Corpus Hub](https://hub.xerj.org/contributors/ajavadinezhad).
+
 License: MIT — [LICENSE](LICENSE).

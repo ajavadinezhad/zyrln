@@ -1,28 +1,32 @@
-# راه‌اندازی خروجی Cloudflare
+<div dir="rtl">
 
-[بازگشت به ساخت رله](relay-setup.md) · [English](../cloudflare-setup.md)
+# راه‌اندازی خروجی <span dir="ltr">Cloudflare</span>
 
-این صفحه مرحله ۲ راهنمای ساخت رله است. حساب Cloudflare، برنامه Node.js/npm و ترمینال لازم دارید. اینجا از **کلید خروجی** استفاده می‌کنید؛ کلید برنامه برای Apps Script و زیرلن است.
+[بازگشت به ساخت رله](relay-setup.md) · [<span dir="ltr">English</span>](../cloudflare-setup.md)
 
-**قبل از انتخاب:** تونل TCP کلادفلر به محدوده IP خود Cloudflare وصل نمی‌شود. ممکن است بعضی سایت‌ها روی اندروید باز نشوند، حتی وقتی سایت‌های دیگر کار می‌کنند. رله HTTP دسکتاپ مسیر متفاوتی دارد و این محدودیت به معنی شکست همه درخواست‌های دسکتاپ به سایت‌های کلادفلری نیست. VPS این محدودیت مشخص TCP را ندارد. محدودیت مصرف حساب همچنان اعمال می‌شود.
+این صفحه مرحله ۲ راهنمای ساخت رله است. حساب <span dir="ltr">Cloudflare</span>، برنامه <span dir="ltr">Node.js/npm</span> و ترمینال لازم دارید. اینجا از **کلید خروجی** استفاده می‌کنید؛ کلید برنامه برای <span dir="ltr">Apps Script</span> و زیرلن است.
+
+**قبل از انتخاب:** تونل <span dir="ltr">TCP</span> کلادفلر به محدوده <span dir="ltr">IP</span> خود <span dir="ltr">Cloudflare</span> وصل نمی‌شود. ممکن است بعضی سایت‌ها روی اندروید باز نشوند، حتی وقتی سایت‌های دیگر کار می‌کنند. رله <span dir="ltr">HTTP</span> دسکتاپ مسیر متفاوتی دارد و این محدودیت به معنی شکست همه درخواست‌های دسکتاپ به سایت‌های کلادفلری نیست. <span dir="ltr">VPS</span> این محدودیت مشخص <span dir="ltr">TCP</span> را ندارد. محدودیت مصرف حساب همچنان اعمال می‌شود.
 
 ## ۱. فایل‌های استقرار را بگیرید
 
-فایل **Source code** مخزن را از [صفحه انتشار](https://github.com/ajavadinezhad/zyrln/releases) بگیرید و استخراج کنید، یا مخزن را clone کنید. ترمینال را در پوشه `relay/deploy/cloudflare` باز کنید.
+فایل **<span dir="ltr">Source code</span>** مخزن را از [صفحه انتشار](https://github.com/ajavadinezhad/zyrln/releases) بگیرید و استخراج کنید، یا مخزن را <span dir="ltr">clone</span> کنید. ترمینال را در پوشه <code dir="ltr">relay/deploy/cloudflare</code> باز کنید.
 
-باید هر دو فایل `worker.js` و `wrangler.toml` وجود داشته باشند. برای دیپلوی از Wrangler استفاده کنید تا اتصال Durable Object موردنیاز اندروید ساخته شود. چسباندن JavaScript به‌تنهایی در داشبورد این اتصال را تنظیم نمی‌کند.
+باید هر دو فایل <code dir="ltr">worker.js</code> و <code dir="ltr">wrangler.toml</code> وجود داشته باشند. برای دیپلوی از <span dir="ltr">Wrangler</span> استفاده کنید تا اتصال <span dir="ltr">Durable Object</span> موردنیاز اندروید ساخته شود. چسباندن <span dir="ltr">JavaScript</span> به‌تنهایی در داشبورد این اتصال را تنظیم نمی‌کند.
 
-## ۲. نام و آدرس Worker را مشخص کنید
+## ۲. نام و آدرس <span dir="ltr">Worker</span> را مشخص کنید
 
-1. در `wrangler.toml` مقدار `name = "mine"` را به نام دلخواه، مثلاً `zyrln-exit`، تغییر دهید.
-2. زیردامنه Workers حساب خود را در داشبورد Cloudflare پیدا کنید. همراه با نام انتخابی، آدرس می‌شود `zyrln-exit.YOUR_SUBDOMAIN.workers.dev`.
-3. در `worker.js` مقدار `CHANGE_ME_WORKER_HOST` را با همین نام میزبان، بدون `https://` یا مسیر، جایگزین کنید. این تنظیم جلوی درخواست رله به خودش را می‌گیرد.
+1. در <code dir="ltr">wrangler.toml</code> مقدار <code dir="ltr">name = "mine"</code> را به نام دلخواه، مثلاً <code dir="ltr">zyrln-exit</code>، تغییر دهید.
+2. زیردامنه <span dir="ltr">Workers</span> حساب خود را در داشبورد <span dir="ltr">Cloudflare</span> پیدا کنید. همراه با نام انتخابی، آدرس می‌شود <code dir="ltr">zyrln-exit.YOUR_SUBDOMAIN.workers.dev</code>.
+3. در <code dir="ltr">worker.js</code> مقدار <code dir="ltr">CHANGE_ME_WORKER_HOST</code> را با همین نام میزبان، بدون <code dir="ltr">https://</code> یا مسیر، جایگزین کنید. این تنظیم جلوی درخواست رله به خودش را می‌گیرد.
 
-بخش‌های موجود مربوط به `TUNNEL_HUB` و migration را در `wrangler.toml` نگه دارید.
+بخش‌های موجود مربوط به <code dir="ltr">TUNNEL_HUB</code> و <span dir="ltr">migration</span> را در <code dir="ltr">wrangler.toml</code> نگه دارید.
 
 ## ۳. وارد حساب شوید، کلید خروجی را ذخیره و دیپلوی کنید
 
 در همان پوشه اجرا کنید:
+
+<div dir="ltr">
 
 ```bash
 npx wrangler login
@@ -30,29 +34,33 @@ npx wrangler secret put ZYRLN_RELAY_KEY
 npx wrangler deploy
 ```
 
-وقتی مقدار secret را خواست، **کلید خروجی** را وارد کنید. اگر قبل از ذخیره کلید پرسید Worker را بسازد، ساخت آن را تأیید و بعد دیپلوی را ادامه دهید. کلید واقعی را در فایل `wrangler.toml` که در گیت ثبت می‌شود نگذارید.
+</div>
 
-در خروجی دیپلوی باید آدرس Worker و اتصال `TUNNEL_HUB` دیده شود. اگر آدرس با مقداری که در `WORKER_HOST` نوشته‌اید فرق دارد، مقدار را اصلاح و دوباره دیپلوی کنید.
+وقتی مقدار <span dir="ltr">secret</span> را خواست، **کلید خروجی** را وارد کنید. اگر قبل از ذخیره کلید پرسید <span dir="ltr">Worker</span> را بسازد، ساخت آن را تأیید و بعد دیپلوی را ادامه دهید. کلید واقعی را در فایل <code dir="ltr">wrangler.toml</code> که در گیت ثبت می‌شود نگذارید.
 
-## ۴. به راه‌اندازی Google Apps Script برگردید
+در خروجی دیپلوی باید آدرس <span dir="ltr">Worker</span> و اتصال <code dir="ltr">TUNNEL_HUB</code> دیده شود. اگر آدرس با مقداری که در <code dir="ltr">WORKER_HOST</code> نوشته‌اید فرق دارد، مقدار را اصلاح و دوباره دیپلوی کنید.
+
+## ۴. به راه‌اندازی <span dir="ltr">Google Apps Script</span> برگردید
 
 این دو مقدار را نگه دارید:
 
 | مقدار | نمونه |
 |---|---|
-| آدرس پایه Worker | `https://zyrln-exit.YOUR_SUBDOMAIN.workers.dev` |
-| کلید خروجی | همان secret که ذخیره کردید |
+| آدرس پایه <span dir="ltr">Worker</span> | <code dir="ltr">https://zyrln-exit.YOUR_SUBDOMAIN.workers.dev</code> |
+| کلید خروجی | همان <span dir="ltr">secret</span> که ذخیره کردید |
 
-به [راهنمای ساخت رله، مرحله ۳](relay-setup.md) برگردید. آدرس پایه Worker را بدون `/relay` وارد کنید، `EXIT_TUNNEL_URL` را خالی بگذارید و `EXIT_RELAY_KEY` را برابر همان کلید خروجی تنظیم کنید.
+به [راهنمای ساخت رله، مرحله ۳](relay-setup.md) برگردید. آدرس پایه <span dir="ltr">Worker</span> را بدون <code dir="ltr">/relay</code> وارد کنید، <code dir="ltr">EXIT_TUNNEL_URL</code> را خالی بگذارید و <code dir="ltr">EXIT_RELAY_KEY</code> را برابر همان کلید خروجی تنظیم کنید.
 
 ## اگر دیپلوی یا اتصال انجام نشد
 
-- **Wrangler اجرا نمی‌شود:** نصب بودن Node.js/npm و پوشه فعلی ترمینال را بررسی کنید.
-- **خطای حساب، پلن یا سهمیه:** پیام مشخص را در حساب Cloudflare بررسی کنید؛ دیپلوی برای همه حساب‌ها تضمین‌شده نیست.
-- **خطای اتصال `TUNNEL_HUB`:** از پوشه‌ای که تنظیمات binding و migration را دارد، دوباره `npx wrangler deploy` را اجرا کنید.
-- **خطای Unauthorized:** مقدار `EXIT_RELAY_KEY` در Apps Script باید با secret روی Worker یکی باشد. خود برنامه از کلید برنامه استفاده می‌کند.
-- **فقط بعضی مقصدها باز نمی‌شوند:** پروفایل VPS را امتحان کنید؛ تلاش دوباره محدودیت مقصد TCP کلادفلر را برطرف نمی‌کند.
+- **<span dir="ltr">Wrangler</span> اجرا نمی‌شود:** نصب بودن <span dir="ltr">Node.js/npm</span> و پوشه فعلی ترمینال را بررسی کنید.
+- **خطای حساب، پلن یا سهمیه:** پیام مشخص را در حساب <span dir="ltr">Cloudflare</span> بررسی کنید؛ دیپلوی برای همه حساب‌ها تضمین‌شده نیست.
+- **خطای اتصال <code dir="ltr">TUNNEL_HUB</code>:** از پوشه‌ای که تنظیمات <span dir="ltr">binding</span> و <span dir="ltr">migration</span> را دارد، دوباره <code dir="ltr">npx wrangler deploy</code> را اجرا کنید.
+- **خطای <span dir="ltr">Unauthorized</span>:** مقدار <code dir="ltr">EXIT_RELAY_KEY</code> در <span dir="ltr">Apps Script</span> باید با <span dir="ltr">secret</span> روی <span dir="ltr">Worker</span> یکی باشد. خود برنامه از کلید برنامه استفاده می‌کند.
+- **فقط بعضی مقصدها باز نمی‌شوند:** پروفایل <span dir="ltr">VPS</span> را امتحان کنید؛ تلاش دوباره محدودیت مقصد <span dir="ltr">TCP</span> کلادفلر را برطرف نمی‌کند.
 
-فایل‌های مخزن: [worker.js](../../relay/deploy/cloudflare/worker.js) و [wrangler.toml](../../relay/deploy/cloudflare/wrangler.toml).
+فایل‌های مخزن: [<span dir="ltr">worker.js</span>](../../relay/deploy/cloudflare/worker.js) و [<span dir="ltr">wrangler.toml</span>](../../relay/deploy/cloudflare/wrangler.toml).
 
-مرجع کلادفلر: [ذخیره secret در Worker](https://developers.cloudflare.com/workers/configuration/secrets/).
+مرجع کلادفلر: [ذخیره <span dir="ltr">secret</span> در <span dir="ltr">Worker</span>](https://developers.cloudflare.com/workers/configuration/secrets/).
+
+</div>

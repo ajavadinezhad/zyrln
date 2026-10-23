@@ -1,245 +1,96 @@
 # Zyrln
 
-[راهنمای فارسی](docs/fa/guide.md)
+[راهنمای فارسی](docs/fa/guide.md) · [Download](https://github.com/ajavadinezhad/zyrln/releases)
 
-Censorship circumvention that routes traffic through Google's infrastructure — no typical VPN fingerprint, no dedicated exit IP that is easy to block on its own.
+Zyrln helps you access blocked sites through Google. Use a config from someone you trust, or create your own connection with a Google account and a Cloudflare Worker or VPS server. Results depend on your network.
 
-Downloads: [GitHub Releases](https://github.com/ajavadinezhad/zyrln/releases)
+## Start here
 
-Also: [Cloudflare exit setup](docs/cloudflare-setup.md) · [Contributing](docs/contributing.md)
-
----
-
-## How it works
-
-Many networks block sites by inspecting TLS (DPI / SNI). Zyrln uses two paths:
-
-**Google services (Gmail, Drive, Maps, etc.):**
-Traffic goes straight to Google, but the TLS ClientHello is split into small fragments so middleboxes that rely on a clean SNI often fail to classify the connection. No server needed.
-
-**Everything else (Instagram, X, Telegram, …):**
-
-```
-Your device → Zyrln → Google Apps Script → your exit relay → the real site
-```
-
-Your device's TLS connections go to Google's own IP ranges; only the encrypted `Host` header — invisible to DPI — actually points at your Apps Script deployment. From a censor's point of view, this traffic is indistinguishable from someone using Google Docs. Apps Script then forwards to your exit relay (VPS or Cloudflare), which opens the real destination.
-
-Client relay/tunnel traffic **must** go through Apps Script (never point the app at the VPS/Worker URL). The exit is reached only from Google's side.
-
----
-
-## Google only (Gmail, Drive, Maps)
-
-**No server. No relay setup.**
-
-1. Download for your platform from [Releases](https://github.com/ajavadinezhad/zyrln/releases)
-2. Run the app — the GUI opens in your browser
-   - **Windows:** double-click the `.exe`
-   - **Linux / macOS:** run with `-gui`:
-     ```bash
-     ./zyrln-VERSION-linux-amd64 -gui          # Linux
-     ./zyrln-VERSION-darwin-arm64 -gui         # macOS Apple Silicon
-     ./zyrln-VERSION-darwin-amd64 -gui         # macOS Intel
-     ```
-3. Click the **lightning bolt** in the top bar to enable Direct Mode
-4. Set your browser HTTP proxy to `127.0.0.1:8085`
-
-Direct Mode works for Google services that are SNI-filtered but not IP-blocked. YouTube streaming and Play Store downloads typically need the full relay. Behavior varies by ISP and location.
-
----
-
-## Full access (Instagram, Twitter, Telegram, …)
-
-Relay chain setup takes about 15 minutes.
-
-Follow the steps in order: the client generates your keys first, the exit relay needs one of them, and Apps Script needs the exit relay's URL plus both keys. Doing it in this order means you never have to backtrack and re-paste a value you didn't have yet.
-
-### What you need
-
-| | What | Cost |
-|---|---|---|
-| Required | Google account | Free |
-| Required | Auth key (you generate it) | Free |
-| Pick one | VPS with public IP | ~$5/mo |
-| Or | Cloudflare Worker | Free — [setup guide](docs/cloudflare-setup.md) |
-
-### Step 1 — Desktop app
-
-1. Download from [Releases](https://github.com/ajavadinezhad/zyrln/releases)
-2. Run — GUI opens in the browser (Windows: `.exe`; Linux/macOS: `-gui` as above)
-3. **Security** → generate and install the CA certificate (**desktop only** — needed for HTTPS relay via MITM)
-4. **Settings** → **Generate Key** → copy the auth key for Apps Script
-
-**Browser proxy:**
-
-| Browser | Setting |
+| What do you have? | Follow this path |
 |---|---|
-| Chrome / Edge | Manual proxy → `127.0.0.1:8085` |
-| Firefox | Manual HTTP proxy → `127.0.0.1` port `8085` |
-| System-wide | SOCKS5 → `127.0.0.1:1080` |
+| A config from someone you trust | Install the app and [connect with your config](#connect-with-a-config) |
+| No config; you want your own relay | Follow [Create your own relay](docs/relay-setup.md), then return here |
+| You only need direct access to Google services | Try [Direct mode](#direct-mode-no-relay-config) |
 
-**CA certificate (desktop relay only):**
+A config contains a **Google Apps Script URL** ending in `/exec` and an **app key**. Never enter a VPS or Worker URL as the app's relay URL. Keep configs private: anyone with a working config can use its relay and quota.
 
-- Chrome/Edge: Settings → Privacy → Security → Manage certificates → Authorities → Import `zyrln-ca.pem`
-- Firefox: Settings → Privacy & Security → Certificates → Authorities → Import
+## Download the right file
 
-### Step 2 — Exit relay
+Open [Releases](https://github.com/ajavadinezhad/zyrln/releases), choose a release, and expand **Assets**.
 
-The exit fetches real websites. Pick one — Cloudflare is simpler and free; a VPS gives you more control over who can see your traffic's destination metadata.
+| Device | File ending |
+|---|---|
+| Android 9 or newer, with the 2.1 preview | `-android.apk` |
+| Windows | `-windows-amd64.exe` |
+| Linux, Intel/AMD 64-bit | `-linux-amd64` |
+| Mac, Apple Silicon | `-darwin-arm64` |
+| Mac, Intel | `-darwin-amd64` |
 
-#### Option A — Cloudflare Worker (free)
+The `-vps.zip` file is for server owners. You do not need it to use an existing config. GitHub's **Source code** archives are not the apps.
 
-See [Cloudflare Worker setup](docs/cloudflare-setup.md) — deploy from `relay/deploy/cloudflare/`.
+**Upgrading Android from v2.0 to v2.1-pre-1:** export your configs first. The signing key changed, so uninstall the old app before installing the preview. Uninstalling removes app data; import your saved configs afterward.
 
-#### Option B — VPS
+## Connect with a config
 
-Linux VPS (amd64 or arm64), public IP, port **8787** open, SSH as `user@host` with `sudo`.
+### Android
 
-1. Download `zyrln-VERSION-vps.zip` from [Releases](https://github.com/ajavadinezhad/zyrln/releases) and unzip
-2. Run `./install-vps-relay.sh user@YOUR_VPS_IP`  
-   Set `ZYRLN_RELAY_KEY=secret` or `ZYRLN_RELAY_KEY=auto` — same value as `EXIT_RELAY_KEY` in Apps Script
-3. In `Code.gs`: `EXIT_RELAY_URL = "http://YOUR_VPS_IP:8787/relay"` and matching `EXIT_RELAY_KEY`
+You do not need a computer, browser proxy, or CA certificate.
 
-Check: `curl -s http://YOUR_VPS_IP:8787/healthz` → `ok`
+1. Install the Android APK.
+2. Copy the complete config text, including its opening `{` and closing `}`.
+3. Open Zyrln and use **Import**. Alternatively, use **+** and enter the Apps Script URL and app key manually.
+4. Select the imported profile, then tap **Connect** and allow Android's VPN permission.
+5. Open a website in your browser to check that traffic works. A successful Ping alone does not confirm browsing.
 
-### Step 3 — Apps Script relay
+Optional: disconnect before changing **Split tunnel** settings to choose which apps use Zyrln. To share a profile privately, use its share/export control.
 
-Front door on Google's servers.
+### Windows, Linux, or macOS
 
-#### Two keys
+The desktop interface opens in your browser. That interface controls a local proxy; opening it does not route browser traffic automatically.
 
-Two separate, independent secrets — confusing them is the most common setup mistake. The app only uses key 1.
+1. Launch the download. On Windows, double-click the `.exe`. On Linux/macOS, make it executable and launch with `-gui`:
 
-| | Key 1 — client | Key 2 — exit |
-|---|---|---|
-| Purpose | Proves *your device* may use *your* Apps Script relay | Proves *your Apps Script* may use *your* exit relay |
-| Path | App → Apps Script | Apps Script → VPS or Cloudflare |
-| In the app | Yes (`auth-key`) | No |
-| Apps Script | `AUTH_KEY` | `EXIT_RELAY_KEY` |
-| Exit | — | `ZYRLN_RELAY_KEY` |
-| On the wire | JSON `"k"` | Header `X-Relay-Key` |
+   ```bash
+   chmod +x ./YOUR_DOWNLOADED_FILE
+   ./YOUR_DOWNLOADED_FILE -gui
+   ```
 
-Key 2 uses the same name on VPS and Cloudflare (`ZYRLN_RELAY_KEY`). Same value in `EXIT_RELAY_KEY` (Code.gs) and `ZYRLN_RELAY_KEY` (exit). If the exit has no key, leave `EXIT_RELAY_KEY` empty in Code.gs.
+2. Use **+** to add a profile. Enter the Apps Script URL and app key, then save and select it.
+3. Under **Tools → Security**, generate/download Zyrln's CA certificate (the file your browser needs to trust relay connections). Import it into the browser you will use for relay browsing and enable website trust. In Firefox: **Settings → Privacy & Security → Certificates → View Certificates → Authorities → Import**. Chrome/Edge certificate controls depend on your operating system; use their certificate manager to import it as a trusted authority. Only trust the certificate generated by your own Zyrln installation.
+4. Set that browser's **HTTP proxy** to `127.0.0.1`, port `8085`. In Firefox, also enable using this proxy for HTTPS. Chrome/Edge normally use the operating system proxy settings, which may affect other apps. SOCKS5 is also available at `127.0.0.1:1080`.
+5. Click **Connect**, then load a website in the configured browser.
 
-```
-App ──key 1──► Apps Script ──key 2──► Cloudflare or VPS
-```
+When finished, disconnect and turn off the browser/system proxy setting so normal browsing is not left pointing at a stopped Zyrln proxy.
 
-1. [script.google.com](https://script.google.com) → **New project**
-2. Paste [`relay/deploy/apps-script/Code.gs`](relay/deploy/apps-script/Code.gs)
-3. Edit constants — **Cloudflare** or **VPS**, not both:
+To send your config to Android, use **Tools → Mobile Export** and transfer the complete text privately.
 
-**Cloudflare:**
+## Direct mode (no relay config)
 
-```js
-const AUTH_KEY        = "your-key-from-step-1";
-const EXIT_RELAY_URL  = "https://your-worker.your-subdomain.workers.dev";  // no /relay
-const EXIT_TUNNEL_URL = "";
-const EXIT_RELAY_KEY  = "your-exit-key";
-```
+Direct mode is intended for Google services; it is not a replacement for a relay for other destinations. It may help with some filtering but cannot overcome every network block.
 
-**VPS:**
+- **Android:** select the Direct/Google entry, tap **Connect**, and allow VPN permission.
+- **Desktop:** select **Direct (Google)**, connect, and set your browser proxy as described above. No Zyrln CA certificate is needed for direct mode.
 
-```js
-const AUTH_KEY        = "your-key-from-step-1";
-const EXIT_RELAY_URL  = "http://YOUR_VPS_IP:8787/relay";
-const EXIT_TUNNEL_URL = "http://YOUR_VPS_IP:8787/tunnel";
-const EXIT_RELAY_KEY  = "your-exit-key";
-```
+## If it does not work
 
-4. **Deploy → New deployment** → Web app → Execute as **Me** → Access **Anyone**
-5. Copy the URL: `https://script.google.com/macros/s/AKfycb.../exec`
+| What you see | What to do next |
+|---|---|
+| Config will not import | Copy the whole JSON config; check that it contains `url` and `key`. |
+| Unauthorized / wrong key | Ask the config owner to check the app key against Apps Script's `AUTH_KEY`. |
+| Connected, but desktop browsing fails | Check the browser proxy and certificate steps above. |
+| Only some sites fail with Cloudflare | Its TCP tunnel cannot connect to Cloudflare IP ranges. Try a VPS profile; this restriction particularly affects Android's tunnel path. |
+| Google quota reached | Try a profile from a different Google account or wait for the quota to recover. Another deployment on the same account shares its quota. |
+| HTML instead of JSON / relay unavailable | The owner should check Apps Script deployment access, its current published version, and quota errors. HTML alone does not prove quota exhaustion. |
+| Android asks for VPN permission again | Allow it. Another VPN may have replaced Zyrln. |
 
-Each Google account gets ~20,000 relay calls/day. Add multiple deployments (different accounts) comma-separated in the app for resilience.
+If you own the relay, use the [setup checkpoints](docs/relay-setup.md#check-before-sharing). Otherwise ask its owner to check it. Report your device, app version, backend, error, and steps to reproduce in [GitHub Issues](https://github.com/ajavadinezhad/zyrln/issues). Remove keys and private config from logs.
 
-### Step 4 — Connect (desktop)
+## More information
 
-1. Click **+** to add a profile
-2. Paste Apps Script URL and auth key
-3. **Save** → **Connect**
+- [Create your own relay](docs/relay-setup.md)
+- [Cloudflare deployment](docs/cloudflare-setup.md)
+- [Build from source and contribute](docs/contributing.md)
 
-### Step 5 — Android
+Only import configs from people you trust. The desktop relay can read the web requests it forwards; the Android tunnel keeps HTTPS content encrypted to the destination. Google and the exit provider can still see connection information such as timing and volume.
 
-The next build supports Android 9 and newer. Android 9 uses the TCP VPN forwarder without the optional system HTTP proxy hint available on Android 10+.
-
-1. Install APK from [Releases](https://github.com/ajavadinezhad/zyrln/releases)
-2. Add config:
-   - **Import Config from Clipboard** (JSON from desktop **Tools → Mobile Export**, or from another phone's share icon), or
-   - **+** and enter URL + key manually
-3. Tap the config → **Connect** → allow VPN permission
-4. Optional: **Split tunnel** — route only selected apps through Zyrln (disconnect VPN to change settings)
-5. Share a config: tap the **share icon** on a config row — JSON copies to clipboard
-
----
-
-## Building from source
-
-Requires Go 1.25+.
-
-```bash
-make desktop              # local ./zyrln
-make desktop-release      # dist/ for Linux, Windows, macOS
-make desktop-linux|windows|macos
-make keystore             # once — Android signing key
-make android              # signed release APK
-make proxy                # run proxy from source (needs CA)
-make test
-make vps-relay-bundle     # → dist/zyrln-VERSION-vps.zip
-```
-
-See [docs/contributing.md](docs/contributing.md) for project layout and developer notes.
-
----
-
-## Troubleshooting
-
-**Relay chain not connecting (full access setup)**
-
-Check in order:
-
-1. Apps Script deployment live, with access set to "Anyone"?
-2. `EXIT_RELAY_KEY` in Apps Script exactly matches `ZYRLN_RELAY_KEY` on your VPS? (Cloudflare doesn't use this key.)
-3. VPS relay running and firewall port open? `curl -s http://YOUR_VPS_IP:8787/healthz` → `ok`
-4. Redeployed Apps Script after your last constant change? (Deploy → Manage deployments → pencil icon → New version → Deploy)
-
-**Nothing loads through the proxy**
-
-- Proxy running? (green indicator in GUI)
-- Browser proxy set to `127.0.0.1:8085`
-- Run diagnostics (play button in Tools)
-
-**HTTPS SSL errors (desktop only)**
-
-- CA not installed or not trusted — re-import `certs/zyrln-ca.pem`
-
-**Apps Script quota exceeded**
-
-- Add deployments from other Google accounts; comma-separate URLs in the app
-
-**YouTube works but Instagram doesn't**
-
-- Instagram is IP-blocked — needs full relay chain
-- Confirm VPS/Cloudflare exit is running
-
-**X / Discord / ChatGPT fail on Cloudflare Worker exit**
-
-- Worker can't reach other Cloudflare-hosted sites — use a VPS exit. See [docs/cloudflare-setup.md](docs/cloudflare-setup.md).
-
----
-
-## Security
-
-- Deploy your own Apps Script and generate your own auth key
-- Never commit `config.env`, `certs/`, or keys
-- Google and your exit provider see metadata (timing, volume), not encrypted payload content on the tunnel path
-- Rotate keys if leaked
-- Keep `certs/zyrln-ca-key.pem` on your device only (desktop)
-
----
-
-## Credits
-
-Domain-fronting: [denuitt1/mhr-cfw](https://github.com/denuitt1/mhr-cfw). TLS fragmentation: [GFW-knocker](https://github.com/GFW-knocker).
-
-License: MIT — [LICENSE](LICENSE).
+Credits: domain fronting from [denuitt1/mhr-cfw](https://github.com/denuitt1/mhr-cfw); TLS fragmentation from [GFW-knocker](https://github.com/GFW-knocker). [MIT license](LICENSE).

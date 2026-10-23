@@ -12,10 +12,10 @@
 - Existing local Android changes include manual profile entry and a clearer notification.
 
 ## Current state
-- The last full Go suite passed on October 11, 2026; subsequent quota-classification changes passed targeted tunnel/Apps Script tests. Rerun the full suite for a release.
-- Android 9/14 passed current connection/quota lifecycle tests. Earlier real Cloudflare/VPS checks passed; current-build live recovery and Iran filtering remain unverified. S25 has the updated APK and its notice was inspected; user-reported handover is separate from automated proof. See TEST_RESULTS.md for current status and historical evidence.
-- Android socket protection now stops a dial when protection fails and logs a clear error. Regression tests cover failure, success, and callback clearing. Emulator behavior passed; physical socket-failure coverage remains pending.
-- Expand this context with decisions agreed with the user.
+- v2.1-pre-1 was published October 15, 2026. Android and Go CI passed for its release commit. Check current CI before making new claims.
+- Android 9/14 emulator tests and earlier live relay checks are recorded in TEST_RESULTS.md. Physical-device and restricted-network coverage is incomplete.
+- Android uses a new permanent release signing key. Users upgrading from v2.0 must export configs and reinstall. Reuse the existing private key for future releases; never commit it or its passwords.
+- Documentation separates app use from relay setup in both English and Persian. Keep the two languages aligned and avoid duplicating setup instructions.
 
 ## Shared memory
 - Read PROJECT_MEMORY.md for the origin story, Google bridge constraint, release history, user feedback, and current technical findings.

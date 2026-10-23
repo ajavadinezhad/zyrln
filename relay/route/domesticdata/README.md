@@ -1,11 +1,7 @@
-# Bundled domestic routing list
+# Domestic domain list
 
-Shipped inside the app via `go:embed` (no runtime download).
+`domains.txt` is bundled into the app when it is built. It is not downloaded while the app runs.
 
-| File | Source | Update |
-|------|--------|--------|
-| `domains.txt` | [iran-hosted-domains releases](https://github.com/bootmortis/iran-hosted-domains/releases) | Replace from latest `domains.txt` asset |
+The routing code matches `.ir` domains and domains in this list, including subdomains. For example, `www.digikala.com` can match `digikala.com`.
 
-Matching uses `.ir` suffix plus this list (with subdomain walk, e.g. `www.digikala.com` → `digikala.com`).
-
-After replacing the file, rebuild (`make android` / desktop). Pinned in tree as of 2026-05-18.
+To update it, review and replace the file using the `domains.txt` asset from [iran-hosted-domains releases](https://github.com/bootmortis/iran-hosted-domains/releases), then rebuild the apps. Review the diff before committing; a routing-list change affects which destinations bypass the relay.

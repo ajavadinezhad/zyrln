@@ -1,8 +1,8 @@
 # Zyrln shared project memory
 
-> Current status: consult TEST_RESULTS.md first. Chronological entries below preserve what was known at each stage; earlier “pending” or “stopped” statements may have been superseded. Current phone uploads/downloads remain unrun; user-reported quota exhaustion is not independently confirmed.
+> Shared history and decisions. Entries describe what was known on their date; they are not live service status. For release history, check GitHub Releases. TEST_RESULTS.md preserves dated test evidence; RELEASE_CHECKLIST.md describes what to run next.
 
-Updated October 11, 2026. This living document records the context established with the owner and should grow through our work together.
+Maintained through October 23, 2026. This living document records the context established with the owner and should grow through our work together.
 
 ## Purpose and origin
 
@@ -157,3 +157,11 @@ The README changes only add the authorized Android 9 minimum-version note. Exist
 
 ## Local-only credential cleanup
 User explicitly limited the credential work to local changes. Replaced the ConfigUtils export-format fixture with an explicit dummy; no application behavior change, no commit/push and no remote deployment/credential change. The old fixture value was already introduced in committed history on June 26, 2026 and matches the active Cloudflare client key (not the VPS key). Local replacement cannot revoke that key remotely or remove history. Active reusable profile remains ~/.config/zyrln-tests/cloudflare.json. Fresh random candidate and replacement line are staged in cloudflare-rotation-pending.json and cloudflare-auth-key-replacement.txt in the same owner-only private directory; cloudflare-rotation-state.json records local-only status. Do not promote the staged key to active config until a matching remote deployment is explicitly authorized and verified. The browser publication handoff is closed. Large phone upload/download remains paused and unrun.
+
+## Documentation usability — October 23, 2026
+
+- Users report setup instructions are difficult to follow. Reworked the English README and Persian guide around existing configs, self-hosting, and direct mode. Android users no longer have to work through desktop setup.
+- Added English/Persian relay setup guides with separate app/exit keys and ordered checkpoints; shortened the Cloudflare guides and fixed source-folder links. Developer build commands use pinned mobile tools matching go.mod.
+- Documentation changes validated locally for links and whitespace; no deployment walkthrough or fresh device test performed for this documentation edit.
+
+- Completed the broader documentation pass: concise release/emulator/contributor steps, current VPS package instructions, corrected routing-list guidance, and explicit historical labels for old test/service observations. Removed links to discarded captures and marked completed manual-entry/setup-guide backlog items. This pass changed documentation only; no app behavior or new device test results are claimed.

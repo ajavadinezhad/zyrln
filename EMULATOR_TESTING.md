@@ -1,53 +1,73 @@
-# Android emulator testing
+# Android emulator tests
 
-The development machine has Android 9, Android 14 and Android 17 Google APIs x86_64 virtual devices named Zyrln_API_28, Zyrln_API_34 and Zyrln_API_37_1 in the Ubuntu SDK at ~/Android/Sdk. The Ubuntu user belongs to kvm with the owner's explicit approval. The virtual device uses 1.5 GB guest RAM; host usage is higher because graphics and emulator overhead are additional.
+These instructions are for development. For app installation, use the [user guide](README.md).
 
-Run from the repository in Ubuntu:
+## Prepare the tools
 
-```sh
+Install JDK 17, Go 1.25, and the Android SDK. The project uses Android platform 37, build-tools 36.0.0, and NDK 26.1.10909125. The Gradle wrapper supplies the Gradle version. Install the Go mobile tools as described in [build instructions](docs/contributing.md#build).
+
+Set the SDK location:
+
+```bash
+export ANDROID_HOME="$HOME/Android/Sdk"
+export PATH="$HOME/go/bin:$ANDROID_HOME/platform-tools:$PATH"
+```
+
+The helper expects a hardware-accelerated x86_64 virtual device named `Zyrln_API_28` (Android 9) or `Zyrln_API_34` (Android 14). Create these with Android Studio's Device Manager or the SDK tools if they do not exist. These are local names, not devices supplied by the repository. On Linux, your user needs access to `/dev/kvm`.
+
+## Build and open the app
+
+From the repository root:
+
+```bash
 scripts/android-emulator.sh --build
 ```
 
-The default device is Android 9. Set ZYRLN_AVD=Zyrln_API_34 for Android 14, after stopping the previous emulator. Only one emulator runs at a time.
+This starts Android 9, rebuilds the Go library and debug APK, runs unit tests and lint, then installs and opens the app. Without `--build`, it installs the existing debug APK.
 
-This rebuilds the Go mobile library for all Android architectures, builds the debug APK, runs JVM unit tests and debug/release lint, installs the app, and opens it. Without --build it uses the last built APK. Debug builds include x86_64; release builds retain phone architectures. Logs are in /tmp/zyrln-emulator.log. Build processes use --no-daemon so they exit afterward.
+Only run one emulator at a time. To switch to Android 14, stop the previous one, then run:
 
-The functional test needs the local fixture:
+```bash
+ZYRLN_AVD=Zyrln_API_34 scripts/android-emulator.sh
+```
 
-```sh
+The script uses port 5554 and 1.5 GB of guest RAM. Actual host memory use is higher. Emulator logs go to `/tmp/zyrln-emulator.log`.
+
+## Run the local tests
+
+The tests can change or clear profiles. Use a disposable emulator, not a personal phone.
+
+Start the local test server in one terminal:
+
+```bash
 python3 scripts/emulator-http-fixture.py
 ```
 
-In another terminal:
+In another terminal, from the repository root:
 
-```sh
+```bash
 cd android
 ANDROID_HOME="$HOME/Android/Sdk" ANDROID_SERIAL=emulator-5554 ./gradlew --no-daemon connectedDebugAndroidTest
 ```
 
-VpnLifecycleTest runs on the disposable virtual device. It opens the app, accepts its VPN prompt, checks the Go proxy and Android VPN state, fetches a known TCP response through the VPN, disconnects, and repeats the cycle. It stops the VPN in cleanup. The fixture listens only on the host loopback address and does not require real relay credentials.
+Reports are in `android/app/build/reports/androidTests/connected/debug`. Check for skipped tests; live relay checks require a private profile and are not part of a normal local pass.
 
-Reports are under android/app/build/reports/androidTests/connected/debug. This direct-mode local test does not establish that Apps Script, a real exit relay, Google direct access, or Iranian networks work. Those require separate integration checks with an actual test profile and network conditions.
+For the combined Go, build, and emulator checks, run:
 
-Stop the emulator to reclaim its memory:
-
-```sh
-~/Android/Sdk/platform-tools/adb -s emulator-5554 emu kill
+```bash
+scripts/verify-android-build.sh
 ```
 
-Run `scripts/verify-android-build.sh` to combine Go checks, rebuilding, JVM tests, and emulator tests.
+## Stop the emulator
 
-## Updated build prerequisites
-The Android build now requires JDK 17, SDK platform 37.0 and build-tools 36.0.0. The wrapper supplies Gradle 9.8.1; AGP 9.1.1 supplies Kotlin. Minimum Android remains 9. Both Makefile and emulator builds pass the native linker flag for 16 KB alignment.
-
-Use ZYRLN_AVD=Zyrln_API_37_1 for the Android 17 image with 16 KB pages. Stop the preceding device first. Socket and VPN lifecycle tests handle the local-network permission prompt required on Android 17. The permission-specific smoke test can be run on a fresh install with:
-
-```sh
-cd android
-./gradlew --no-daemon connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.zyrln.relay.VpnLifecycleTest
+```bash
+"$ANDROID_HOME/platform-tools/adb" -s emulator-5554 emu kill
 ```
 
-A normal suite that already granted permission verifies traffic, not a fresh prompt; record those outcomes separately.
+Stop the local test server too when finished.
 
-## Android 17 emulator limitation
-The 16 KB image uses 4 GB test storage and 1.5 GB guest RAM. Android 36+ test devices are switched to three-button navigation to avoid an emulator graphics assertion during gesture-region sampling. This changes only the emulator. Android 17 still crashes system_server in task-snapshot conversion before tests start, so its suite and permission flow are not validated. See TEST_RESULTS.md#android-warning-review and android17-emulator-crash.log. Guest screenshots hit the same image bug; host emulator screenshots must be used when the image is repaired.
+## What these tests establish
+
+Local tests cover app controls, VPN lifecycle, local traffic, and simulated connection failures. They do not prove Google reachability, VPS/Cloudflare availability, or operation under filtering. Follow the [release checklist](RELEASE_CHECKLIST.md) for live checks.
+
+Android 17 was not validated: the previously tested emulator image crashed before app tests could run. Treat that historical result as an environment problem, not an Android 17 compatibility claim. See [the recorded warning review](TEST_RESULTS.md#android-warning-review).

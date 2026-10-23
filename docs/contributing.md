@@ -1,137 +1,70 @@
-# Contributing
+# Build and contribute
 
-User setup: [README.md](../README.md) · [فارسی](fa/guide.md). Relay deploy: [cloudflare-setup.md](cloudflare-setup.md).
+For installation and connection, use the [English guide](../README.md) or [راهنمای فارسی](fa/guide.md). To deploy a relay, use [relay setup](relay-setup.md).
 
-## Project structure
+## Build
 
-```
-zyrln/
-├── platforms/
-│   ├── desktop/        # CLI + browser GUI (main package)
-│   │   ├── main.go
-│   │   └── gui/
-│   └── mobile/         # gomobile bindings for Android
-│       └── mobile.go   # StartTunnel, StartDirect, AttachTUN, Stop, Ping, …
-│
-├── relay/
-│   ├── core/           # Stable API re-export (desktop + mobile import this)
-│   ├── route/          # Google direct, domestic bypass, TLS fragmentation
-│   ├── appscript/      # Domain-fronted HTTP relay + Coalescer
-│   ├── mitm/           # Local HTTP CONNECT + SOCKS5 MITM (desktop)
-│   ├── tunnel/         # Raw TCP-over-HTTP tunnel client (Android relay path)
-│   ├── tun/            # TUN IPv4 forwarder (Android VPN fd)
-│   ├── exit/           # VPS / self-hosted exit relay binary
-│   ├── conn/, log/, netdial/
-│   └── deploy/
-│       ├── apps-script/Code.gs
-│       └── cloudflare/worker.js
-│
-├── android/
-│   └── app/src/main/java/com/zyrln/relay/
-│       ├── MainActivity.kt
-│       ├── RelayVpnService.kt
-│       ├── SplitTunnelAppsActivity.kt
-│       └── ConfigUtils.kt
-│
-├── docs/
-├── Makefile
-└── go.mod
-```
+Desktop and VPS builds require Go 1.25. Android also requires JDK 17, the Android SDK platform 37, build-tools 36.0.0, and NDK 26.1.10909125. Install these before building. The repository includes its Gradle wrapper.
 
-## Relay packages
-
-| Package | Used by | Role |
-|---------|---------|------|
-| `route` | `tunnel`, `mitm`, `tun` | Per-host routing before relay/tunnel |
-| `appscript` | `mitm`, `tunnel` | Outbound HTTP to Apps Script (domain-fronted) |
-| `mitm` | Desktop | Browser proxy + local CA MITM |
-| `tunnel` | Android | CONNECT proxy over Apps Script `/tunnel` |
-| `tun` | Android | VPN TUN → local proxy (with `AttachTUN`) |
-| `exit` | VPS deploy | `/relay` + `/tunnel` exit |
-
-When changing relay JSON or `Code.gs`, update **`deploy/apps-script/Code.gs`** and **`appscript`** together. Tunnel fields (`t`, `tb`) must not alter legacy relay parsing (`u`, `q`, `gz`).
-
-## Routing (by host)
-
-Evaluated in order:
-
-1. **Domestic** — `.ir` or bundled list → plain TCP (no Apps Script, no MITM).
-2. **Direct** — when enabled, Google domains → TLS ClientHello fragmentation.
-3. **Relay** — everything else → Apps Script (desktop: MITM + HTTP relay; Android: TCP tunnel).
-
-**Android:** VPN + TUN forwarder + local CONNECT proxy. End-to-end TLS through tunnel; no CA install.
-
-**Desktop:** HTTP CONNECT / SOCKS. Foreign HTTPS on the relay path needs **CA installed** (MITM decrypt → Apps Script relay).
-
-## Key concepts
-
-**`relay/core`** re-exports the stable API. Implementation lives in subpackages:
-
-- `relay/appscript/relay.go` — domain-fronted relay requests (`buildRelayPayload`, `RelayRequestMulti`).
-- `relay/mitm/proxy.go` — HTTP/SOCKS proxy; HTTPS uses CONNECT + MITM when relaying.
-- `relay/mitm/cert.go` — local CA and per-host leaf certs.
-- `relay/route/direct.go`, `fragment.go` — Google detection and TLS fragmentation.
-
-**`platforms/mobile`** exposes a flat string-based API because gomobile only supports primitives at the boundary. Errors return as strings, not Go `error` values.
-
-## Running tests
+Run from the repository root:
 
 ```bash
-go test ./relay/... ./platforms/desktop/...
+make desktop          # local ./zyrln
+make desktop-release  # Windows, Linux, and both macOS binaries in dist/
+make vps-relay-bundle  # VPS install archive in dist/
 ```
 
-Or everything:
+For Android, install both mobile tools at the version in `go.mod`:
+
+```bash
+export GOTOOLCHAIN=go1.25.0
+export ANDROID_HOME="$HOME/Android/Sdk"
+export PATH="$HOME/go/bin:$PATH"
+mobile_version="$(go list -m -f '{{.Version}}' golang.org/x/mobile)"
+go install "golang.org/x/mobile/cmd/gomobile@${mobile_version}"
+go install "golang.org/x/mobile/cmd/gobind@${mobile_version}"
+mkdir -p android/app/libs
+gomobile bind -ldflags="-extldflags=-Wl,-z,max-page-size=16384" -target android -androidapi 21 -o android/app/libs/mobile.aar zyrln/platforms/mobile
+cd android
+./gradlew --no-daemon assembleDebug assembleRelease testDebugUnitTest lintDebug lintRelease
+```
+
+Without a release signing configuration, Gradle signs the release build with a debug key. That is suitable for local testing, not an official release.
+
+For a release, provide the existing private keystore through the ignored `android/keystore.properties` file (`storeFile`, `storePassword`, `keyAlias`, `keyPassword`). Keep the keystore and a backup outside Git. Then `make android` rebuilds the native library and produces the release APK in `dist/`. Do not generate a replacement signing key for an ordinary update.
+
+`VERSION` sets release filenames and Android's displayed version; `VERSION_CODE` sets Android's increasing build number. Also update `appVersion` in `platforms/desktop/main.go` when changing the version.
+
+## Test
 
 ```bash
 go test ./...
 ```
 
-## Building
+Run race checks when changing shared state or connection handling. See [emulator tests](../EMULATOR_TESTING.md) and the [release checklist](../RELEASE_CHECKLIST.md) for device and real-service checks. Save dated results in [TEST_RESULTS.md](../TEST_RESULTS.md); record failed and skipped checks too.
 
-```bash
-make desktop          # local ./zyrln
-make desktop-release  # dist/ binaries for Linux, Windows, macOS
-make android          # signed release APK (requires keystore)
-```
+## Find the code
 
-First-time gomobile:
+| Location | Purpose |
+|---|---|
+| `platforms/desktop/` | Desktop program and browser interface |
+| `platforms/mobile/` | Go functions called by Android |
+| `android/app/src/main/` | Android interface and VPN service |
+| `relay/route/` | Direct Google access and domestic bypass rules |
+| `relay/appscript/` | Requests sent through Google Apps Script |
+| `relay/mitm/` | Desktop proxy and local certificate handling |
+| `relay/tunnel/` | Android TCP sessions through the bridge |
+| `relay/tun/` | Android VPN packet handling |
+| `relay/exit/` | VPS relay server |
+| `relay/deploy/` | Apps Script and Cloudflare deployment files |
+| `relay/core/` | Shared functions exported to the clients |
 
-```bash
-go install golang.org/x/mobile/cmd/gomobile@latest
-gomobile init
-export ANDROID_HOME=~/Android/Sdk
-```
+Routing checks domestic bypass first, direct Google access when enabled second, and the relay path last. Android's relay tunnel keeps destination HTTPS encrypted and needs no local certificate. The desktop HTTP relay decrypts HTTPS using the local certificate and passes requests to the bridge; it has different privacy properties.
 
-## Adding a probe
+## Change the relay messages
 
-Probes live in `platforms/desktop/main.go` → `defaultProbes()`:
+Keep the Go request/response formats and `relay/deploy/apps-script/Code.gs` compatible. The desktop HTTP relay and Android TCP tunnel use different messages. Update the matching tests, and test existing configs before declaring compatibility.
 
-```go
-{
-    ID:          "unique-id",
-    Name:        "Human readable name",
-    Category:    "baseline",
-    Method:      http.MethodGet,
-    URL:         "https://example.com/",
-    Expectation: "what a passing result means",
-}
-```
+## Keep secrets private
 
-## Changing the relay protocol
-
-Payload format: `relay/appscript/relay.go` (`BuildRelayPayload`) must match `relay/deploy/apps-script/Code.gs`.
-
-Response shape (`workerResponse` in `relay.go`):
-
-```go
-type workerResponse struct {
-    Status  int               `json:"s"`
-    Headers map[string]string `json:"h"`
-    Body    string            `json:"b"` // base64
-    Error   string            `json:"e"`
-}
-```
-
-## Secrets
-
-Never commit `config.env`, `certs/`, or files containing `AUTH_KEY` / relay keys. Generate the client auth key in the desktop GUI: **Settings → Generate Key**.
+Never commit real configs, app/exit keys, certificates, or signing passwords. Use [separate app and exit keys](relay-setup.md#1-prepare-two-separate-keys). Share error reports with those values removed.

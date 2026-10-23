@@ -1,82 +1,58 @@
-# راه‌اندازی Cloudflare Worker
+# راه‌اندازی خروجی Cloudflare
 
-[English](../cloudflare-setup.md)
+[بازگشت به ساخت رله](relay-setup.md) · [English](../cloudflare-setup.md)
 
-خروجی رایگان به‌جای VPS. یک Worker هم **رله HTTP** (دسکتاپ) هم **تونل TCP** (اندروید) را دارد. فقط با Wrangler دیپلوی کن — کد را آپلود می‌کند و binding `TUNNEL_HUB` Durable Object که اندروید نیاز دارد را ثبت می‌کند.
+این صفحه مرحله ۲ راهنمای ساخت رله است. حساب Cloudflare، برنامه Node.js/npm و ترمینال لازم دارید. اینجا از **کلید خروجی** استفاده می‌کنید؛ کلید برنامه برای Apps Script و زیرلن است.
 
-## دو کلید
+**قبل از انتخاب:** تونل TCP کلادفلر به محدوده IP خود Cloudflare وصل نمی‌شود. ممکن است بعضی سایت‌ها روی اندروید باز نشوند، حتی وقتی سایت‌های دیگر کار می‌کنند. رله HTTP دسکتاپ مسیر متفاوتی دارد و این محدودیت به معنی شکست همه درخواست‌های دسکتاپ به سایت‌های کلادفلری نیست. VPS این محدودیت مشخص TCP را ندارد. محدودیت مصرف حساب همچنان اعمال می‌شود.
 
-| | کلید ۱ — کلاینت | کلید ۲ — exit |
-|---|---|---|
-| **مسیر** | اپ → Apps Script | Apps Script → Worker |
-| **در اپ** | بله (`auth-key`) | خیر |
-| **Apps Script** | `AUTH_KEY` | `EXIT_RELAY_KEY` |
-| **Cloudflare** | — | `ZYRLN_RELAY_KEY` در `wrangler.toml` |
+## ۱. فایل‌های استقرار را بگیرید
 
-کلید ۲ **همان کلید VPS** است (`ZYRLN_RELAY_KEY`). همان مقدار در Code.gs و wrangler.
+فایل **Source code** مخزن را از [صفحه انتشار](https://github.com/ajavadinezhad/zyrln/releases) بگیرید و استخراج کنید، یا مخزن را clone کنید. ترمینال را در پوشه `relay/deploy/cloudflare` باز کنید.
 
-## دیپلوی
+باید هر دو فایل `worker.js` و `wrangler.toml` وجود داشته باشند. برای دیپلوی از Wrangler استفاده کنید تا اتصال Durable Object موردنیاز اندروید ساخته شود. چسباندن JavaScript به‌تنهایی در داشبورد این اتصال را تنظیم نمی‌کند.
 
-```bash
-cd relay/deploy/cloudflare
-npm install -g wrangler   # یک بار
-wrangler login            # یک بار
-```
+## ۲. نام و آدرس Worker را مشخص کنید
 
-قبل از دیپلوی:
+1. در `wrangler.toml` مقدار `name = "mine"` را به نام دلخواه، مثلاً `zyrln-exit`، تغییر دهید.
+2. زیردامنه Workers حساب خود را در داشبورد Cloudflare پیدا کنید. همراه با نام انتخابی، آدرس می‌شود `zyrln-exit.YOUR_SUBDOMAIN.workers.dev`.
+3. در `worker.js` مقدار `CHANGE_ME_WORKER_HOST` را با همین نام میزبان، بدون `https://` یا مسیر، جایگزین کنید. این تنظیم جلوی درخواست رله به خودش را می‌گیرد.
 
-1. **`worker.js`** — `WORKER_HOST = "your-worker.your-subdomain.workers.dev"` (فقط hostname، بدون `https://`)
-2. **`wrangler.toml`** — `name` و `ZYRLN_RELAY_KEY` (کلید ۲)
-3. **`Code.gs`** — `AUTH_KEY` (کلید ۱)، `EXIT_RELAY_URL`، `EXIT_RELAY_KEY` (کلید ۲، همان مقدار)
+بخش‌های موجود مربوط به `TUNNEL_HUB` و migration را در `wrangler.toml` نگه دارید.
 
-```toml
-# wrangler.toml
-[vars]
-ZYRLN_RELAY_KEY = "your-exit-key"
-```
+## ۳. وارد حساب شوید، کلید خروجی را ذخیره و دیپلوی کنید
 
-```js
-// Code.gs
-const AUTH_KEY        = "your-app-key";
-const EXIT_RELAY_URL  = "https://your-worker.workers.dev";  // no /relay
-const EXIT_TUNNEL_URL = "";
-const EXIT_RELAY_KEY  = "your-exit-key";
-```
+در همان پوشه اجرا کنید:
 
 ```bash
-wrangler deploy
+npx wrangler login
+npx wrangler secret put ZYRLN_RELAY_KEY
+npx wrangler deploy
 ```
 
-خروجی باید شامل `env.TUNNEL_HUB (TunnelHub)` و URL `*.workers.dev` باشد.
+وقتی مقدار secret را خواست، **کلید خروجی** را وارد کنید. اگر قبل از ذخیره کلید پرسید Worker را بسازد، ساخت آن را تأیید و بعد دیپلوی را ادامه دهید. کلید واقعی را در فایل `wrangler.toml` که در گیت ثبت می‌شود نگذارید.
 
-## تأیید
+در خروجی دیپلوی باید آدرس Worker و اتصال `TUNNEL_HUB` دیده شود. اگر آدرس با مقداری که در `WORKER_HOST` نوشته‌اید فرق دارد، مقدار را اصلاح و دوباره دیپلوی کنید.
 
-```bash
-curl -s -X POST "https://your-worker.workers.dev/tunnel" \
-  -H "Content-Type: application/json" \
-  -H "X-Relay-Key: your-exit-key" \
-  -d '{"op":"open","id":"test-1","target":"149.154.167.92:443"}'
-```
+## ۴. به راه‌اندازی Google Apps Script برگردید
 
-انتظار: `{"ok":true}`. اگر `missing TUNNEL_HUB binding` دیدی، دوباره `wrangler deploy` بزن.
+این دو مقدار را نگه دارید:
 
-## Worker در برابر VPS
+| مقدار | نمونه |
+|---|---|
+| آدرس پایه Worker | `https://zyrln-exit.YOUR_SUBDOMAIN.workers.dev` |
+| کلید خروجی | همان secret که ذخیره کردید |
 
-| | Worker | VPS |
-|---|---|---|
-| هزینه | Free tier | ~۵ دلار/ماه |
-| تونل اندروید / تلگرام | بله | بله |
-| رله HTTP دسکتاپ | بله | بله |
-| نام کلید ۲ | `ZYRLN_RELAY_KEY` | `ZYRLN_RELAY_KEY` |
-| سایت‌های پشت Cloudflare (X، Discord، ChatGPT…) | **خیر** — پایین را ببین | بله |
-| پایداری اتصال طولانی | خوب، نه عالی — پایین | بهترین |
+به [راهنمای ساخت رله، مرحله ۳](relay-setup.md) برگردید. آدرس پایه Worker را بدون `/relay` وارد کنید، `EXIT_TUNNEL_URL` را خالی بگذارید و `EXIT_RELAY_KEY` را برابر همان کلید خروجی تنظیم کنید.
 
-**پیشنهاد: VPS به‌عنوان exit اصلی، Worker به‌عنوان fallback رایگان.**
+## اگر دیپلوی یا اتصال انجام نشد
 
-## مقصدهای پشت Cloudflare کار نمی‌کنند
+- **Wrangler اجرا نمی‌شود:** نصب بودن Node.js/npm و پوشه فعلی ترمینال را بررسی کنید.
+- **خطای حساب، پلن یا سهمیه:** پیام مشخص را در حساب Cloudflare بررسی کنید؛ دیپلوی برای همه حساب‌ها تضمین‌شده نیست.
+- **خطای اتصال `TUNNEL_HUB`:** از پوشه‌ای که تنظیمات binding و migration را دارد، دوباره `npx wrangler deploy` را اجرا کنید.
+- **خطای Unauthorized:** مقدار `EXIT_RELAY_KEY` در Apps Script باید با secret روی Worker یکی باشد. خود برنامه از کلید برنامه استفاده می‌کند.
+- **فقط بعضی مقصدها باز نمی‌شوند:** پروفایل VPS را امتحان کنید؛ تلاش دوباره محدودیت مقصد TCP کلادفلر را برطرف نمی‌کند.
 
-Worker نمی‌تواند به سایت‌های پشت Cloudflare برسد — runtime اتصال TCP خروجی به IPهای Cloudflare را بلاک می‌کند (close code `4001`). محدودیت پلتفرم؛ fix سمت Worker وجود ندارد.
+فایل‌های مخزن: [worker.js](../../relay/deploy/cloudflare/worker.js) و [wrangler.toml](../../relay/deploy/cloudflare/wrangler.toml).
 
-سرویس‌های مهم مشکل‌دار: **X / Twitter، Discord، ChatGPT، LinkedIn** (و بیشتر دامنه‌های ad/CDN). برای این‌ها exit VPS استفاده کن.
-
-فایل‌ها: [`worker.js`](../../relay/deploy/cloudflare/worker.js)، [`wrangler.toml`](../../relay/deploy/cloudflare/wrangler.toml).
+مرجع کلادفلر: [ذخیره secret در Worker](https://developers.cloudflare.com/workers/configuration/secrets/).

@@ -1,82 +1,58 @@
-# Cloudflare Worker Setup
+# Set up a Cloudflare exit
 
-[فارسی](fa/cloudflare-setup.md)
+[Back to relay setup](relay-setup.md) · [فارسی](fa/cloudflare-setup.md)
 
-Free exit alternative to a VPS. One Worker handles **HTTP relay** (desktop) and **TCP tunnel** (Android). Deploy with Wrangler only — it uploads the code and registers the `TUNNEL_HUB` Durable Object binding Android needs.
+This is step 2 of the relay setup guide. You need a Cloudflare account, Node.js/npm, and a terminal. Use your **exit key** here; the app key belongs in Apps Script and Zyrln.
 
-## Two keys
+**Before choosing Cloudflare:** its outbound TCP tunnel cannot connect to Cloudflare IP ranges. Affected destinations may fail on Android even when other sites work. Desktop HTTP relay uses a different path; this restriction does not establish that every desktop request to a Cloudflare-hosted site fails. A VPS avoids this particular TCP restriction. Account limits still apply.
 
-| | Key 1 — client | Key 2 — exit |
-|---|----------------|--------------|
-| **Path** | App → Apps Script | Apps Script → Worker |
-| **In the app** | Yes (`auth-key`) | No |
-| **Apps Script** | `AUTH_KEY` | `EXIT_RELAY_KEY` |
-| **Cloudflare** | — | `ZYRLN_RELAY_KEY` in `wrangler.toml` |
+## 1. Get the deployment files
 
-Key 2 is the **same key VPS uses** (`ZYRLN_RELAY_KEY`). Same value in Code.gs and wrangler.
+Download and extract the repository's **Source code** archive from the [release page](https://github.com/ajavadinezhad/zyrln/releases), or clone the repository. Open a terminal in `relay/deploy/cloudflare` inside that folder.
 
-## Deploy
+Both `worker.js` and `wrangler.toml` must be present. Use Wrangler for deployment: it creates the Durable Object binding needed by Android. Pasting just the JavaScript into the dashboard does not configure that binding.
 
-```bash
-cd relay/deploy/cloudflare
-npm install -g wrangler   # once
-wrangler login            # once
-```
+## 2. Choose the Worker name and hostname
 
-Edit before deploy:
+1. In `wrangler.toml`, change `name = "mine"` to your chosen Worker name, for example `zyrln-exit`.
+2. Find your account's Workers subdomain in the Cloudflare dashboard. Combine it with that name: `zyrln-exit.YOUR_SUBDOMAIN.workers.dev`.
+3. In `worker.js`, replace `CHANGE_ME_WORKER_HOST` with that hostname, without `https://` or a path. This setting prevents the relay from fetching itself.
 
-1. **`worker.js`** — `WORKER_HOST = "your-worker.your-subdomain.workers.dev"` (hostname only, no `https://`)
-2. **`wrangler.toml`** — `name` and `ZYRLN_RELAY_KEY` (key 2)
-3. **`Code.gs`** — `AUTH_KEY` (key 1), `EXIT_RELAY_URL`, `EXIT_RELAY_KEY` (key 2, same value)
+Keep the existing `TUNNEL_HUB` binding and migration entries in `wrangler.toml`.
 
-```toml
-# wrangler.toml
-[vars]
-ZYRLN_RELAY_KEY = "your-exit-key"
-```
+## 3. Sign in, store the exit key, and deploy
 
-```js
-// Code.gs
-const AUTH_KEY        = "your-app-key";
-const EXIT_RELAY_URL  = "https://your-worker.workers.dev";  // no /relay
-const EXIT_TUNNEL_URL = "";
-const EXIT_RELAY_KEY  = "your-exit-key";
-```
+Run these from the same folder:
 
 ```bash
-wrangler deploy
+npx wrangler login
+npx wrangler secret put ZYRLN_RELAY_KEY
+npx wrangler deploy
 ```
 
-Confirm output includes `env.TUNNEL_HUB (TunnelHub)` and your `*.workers.dev` URL.
+When prompted for the secret, paste your **exit key**. If asked to create the Worker before storing its secret, agree to create it, then continue with deployment. Do not put your real key into a committed `wrangler.toml`.
 
-## Verify
+The deployment output should show the Worker URL and the `TUNNEL_HUB` binding. If the URL differs from the hostname you entered in `WORKER_HOST`, correct that value and deploy again.
 
-```bash
-curl -s -X POST "https://your-worker.workers.dev/tunnel" \
-  -H "Content-Type: application/json" \
-  -H "X-Relay-Key: your-exit-key" \
-  -d '{"op":"open","id":"test-1","target":"149.154.167.92:443"}'
-```
+## 4. Continue with Google Apps Script
 
-Expect `{"ok":true}`. If you see `missing TUNNEL_HUB binding`, run `wrangler deploy` again.
+Keep these two values:
 
-## Worker vs VPS
+| Value | Example |
+|---|---|
+| Worker base URL | `https://zyrln-exit.YOUR_SUBDOMAIN.workers.dev` |
+| Exit key | The secret you just stored |
 
-| | Worker | VPS |
-|---|---|---|
-| Cost | Free tier | ~$5/mo |
-| Android tunnel / Telegram | Yes | Yes |
-| Desktop HTTP relay | Yes | Yes |
-| Key 2 name | `ZYRLN_RELAY_KEY` | `ZYRLN_RELAY_KEY` |
-| Sites behind Cloudflare (X, Discord, ChatGPT…) | **No** — see below | Yes |
-| Long-lived connection stability | Good, not perfect — see below | Best |
+Return to [step 3: publish the Google bridge](relay-setup.md#3-publish-the-google-apps-script-bridge). Use the Worker base URL without `/relay`, leave `EXIT_TUNNEL_URL` empty, and set `EXIT_RELAY_KEY` to the same exit key.
 
-**Recommendation: use a VPS as the primary exit and the Worker as a free fallback.**
+## If deployment or connection fails
 
-## Cloudflare-fronted destinations don't work
+- **Wrangler cannot run:** check that Node.js/npm are installed and that the terminal is in the deployment folder.
+- **Account, plan, or quota error:** resolve the specific message in your Cloudflare account; deployment is not guaranteed for every account.
+- **Missing `TUNNEL_HUB` binding:** deploy from the folder containing the unchanged binding/migration sections with `npx wrangler deploy`.
+- **Unauthorized:** check that Apps Script's `EXIT_RELAY_KEY` matches the Worker secret. The app itself uses the separate app key.
+- **Only certain destinations fail:** try a VPS profile; repeated retries cannot remove Cloudflare's TCP destination restriction.
 
-A Worker can't reach sites behind Cloudflare — the runtime blocks outbound TCP to Cloudflare IPs (close code `4001`). Platform limit, no Worker-side fix.
+Sources in this repository: [worker.js](../relay/deploy/cloudflare/worker.js) and [wrangler.toml](../relay/deploy/cloudflare/wrangler.toml).
 
-Major broken services: **X / Twitter, Discord, ChatGPT, LinkedIn** (plus most ad/CDN domains). Use a VPS exit for these. We intend to work toward routing such hosts to a non-Cloudflare exit.
-
-Files: [`worker.js`](../relay/deploy/cloudflare/worker.js), [`wrangler.toml`](../relay/deploy/cloudflare/wrangler.toml).
+Cloudflare reference: [Worker secrets](https://developers.cloudflare.com/workers/configuration/secrets/).

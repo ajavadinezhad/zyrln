@@ -2,7 +2,7 @@
 
 This is the single test-results document. The summary reflects the latest verified state on October 11, 2026; the detailed records below are historical snapshots. Earlier pending checks, service-stop statements and coverage percentages must be read in their original context. Use RELEASE_CHECKLIST.md for per-build steps and PROJECT_MEMORY.md for shared decisions.
 
-## Current status
+## Recorded status — October 11, 2026
 
 | Area | Verified result | Remaining limits |
 | --- | --- | --- |
@@ -13,7 +13,7 @@ This is the single test-results document. The summary reflects the latest verifi
 | Desktop | Both exits passed browser rendering, bounded transfers, certificate lifecycle and isolated adapter recovery | Physical Windows trust/network checks and larger/incremental streaming remain unverified |
 | Coverage | Earlier Go statement baseline was 67.2% | It is not a current-tree percentage or Android Kotlin coverage measurement |
 
-The dedicated VPS relay remains running for phone testing. The temporary phone transfer fixture is stopped; no phone upload/download workload has run. Emulators are stopped. No instrumentation or preference-clearing tests were run on the personal phone.
+At the end of the October 11 session, the dedicated VPS relay was running, the temporary phone transfer server and emulators were stopped, and phone upload/download tests had not run. These are historical observations, not today’s service status. No tests that clear profiles were run on the personal phone.
 
 ## Detailed verification records
 
@@ -100,7 +100,7 @@ Real Google Apps Script plus VPS and Cloudflare exits have not been deployed or 
 
 Run scripts/verify-android-build.sh from the Zyrln repository in Ubuntu. It defaults to the Android 9 emulator, builds and tests, then reinstalls and opens the app. The guide is EMULATOR_TESTING.md. Only one emulator runs at a time; Gradle build processes exit afterward.
 
-![Zyrln running on Android 9](zyrln-android9.png)
+Screenshot removed during the owner-approved cleanup (zyrln-android9.png).
 
 Socket fault scenarios now pass on both Android 9 and Android 14 after the blocked-upload shutdown fix. See TEST_RESULTS.md#android-socket-failure-checks and the socket-failure-android9-fixed.xml / socket-failure-android14-fixed.xml reports for the latest three-test runs.
 
@@ -589,9 +589,9 @@ Still pending: real Apps Script diagnostics and both exit backends, desktop stal
 
 The only captured console error came from a browser autofill extension, not the Zyrln script.
 
-![Browser test evidence](web-app-test.jpg)
+Screenshot removed during the owner-approved cleanup (web-app-test.jpg).
 
-![Fixed custom-port proxy](web-app-fixed.jpg)
+Screenshot removed during the owner-approved cleanup (web-app-fixed.jpg).
 
 </details>
 

@@ -8,7 +8,7 @@ Use this for each candidate build. Record the commit, version, device, backend, 
 2. Rebuild the Go Android library before building the APK. See [build instructions](docs/contributing.md#build).
 3. Run Android unit tests and debug/release lint. Use [emulator instructions](EMULATOR_TESTING.md) for device tests on Android 9 and 14, one at a time.
 4. Check that the app displays the version in `VERSION` and that Android uses `VERSION_CODE`.
-5. Check release APK signing. Use the existing release key so users can update. If it must change, explain that users need to export configs, uninstall, and reinstall.
+5. Verify that the APK uses the same release signing certificate as the previously published Android APK so users can update. If the signing key is unavailable, stop and recover it before publishing. A signing-key change requires a separate decision and reinstall instructions.
 
 ## 2. Check the app
 
@@ -62,9 +62,16 @@ The detailed records in [TEST_RESULTS.md](TEST_RESULTS.md) describe earlier runs
 
 ## 5. Package and publish
 
-- Build the Android release APK, Windows/Linux desktop binaries, both macOS desktop binaries, and the VPS bundle.
-- Verify APK version and signing, check the VPS archive, and calculate file checksums.
-- Publish the six standard files. Keep debug APKs, test captures, configs, certificates, and signing files out of release assets.
+Every release and prerelease needs all six files built for that version, even when only one platform changed:
+
+- Signed Android release APK
+- Windows amd64 executable
+- Linux amd64 executable
+- macOS Intel executable
+- macOS Apple Silicon executable
+- VPS ZIP with both supported server architectures
+
+Verify the APK version and certificate, check the ZIP contents, and compare uploaded checksums with the local files. Publish only after all six verified files are attached to the draft. If one is missing, keep the release as a draft. Keep debug APKs, test captures, configs, certificates, and signing files out of release assets.
 - State user-visible changes, deployment requirements, known limitations, and any reinstall requirement in the release notes.
 - Mark preview releases as prereleases.
 - Stop emulators and temporary test services when finished. Keep any service still needed by the test team available and record who uses it.

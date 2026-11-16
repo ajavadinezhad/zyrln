@@ -1,0 +1,50 @@
+body.setup-page { min-height: 100vh; height: auto; overflow: auto; color-scheme: dark; }
+body.setup-page.light-mode { color-scheme: light; }
+.setup-page main { max-width: 50rem; margin: 2rem auto; padding: 0 1rem 2rem; }
+.setup-page a { color: var(--accent-primary); }
+.setup-page .card { display: block; margin: 1rem 0; padding: var(--space-lg); min-width: 0; }
+.setup-page h1 { margin-block: .5rem; }
+.setup-page h2 { margin-block-end: .5rem; }
+.setup-page p, .setup-page ol { margin-block: .6rem; }
+.setup-page p { color: var(--text-dim); }
+.setup-page ol { padding-inline-start: 1.5rem; }
+.setup-page li { margin-block: .4rem; }
+.setup-page label { display: block; font-weight: 600; }
+.setup-page legend { padding-inline-end: .35rem; font-weight: 700; }
+.setup-page label.setup-option {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-sm);
+    vertical-align: middle;
+    cursor: pointer;
+}
+.setup-page .setup-choice .setup-option { margin: var(--space-xs) 0; margin-inline-end: var(--space-lg); }
+.setup-page .setup-existing { margin-block: var(--space-sm) var(--space-md); }
+.setup-page input:is([type="text"], [type="url"], [type="password"]), .setup-page textarea {
+    display: block;
+    width: 100%;
+    margin: .5rem 0;
+}
+.setup-page input:is([type="radio"], [type="checkbox"]) {
+    flex: none;
+    inline-size: 1rem;
+    block-size: 1rem;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    accent-color: var(--accent-primary);
+}
+.setup-page textarea { min-height: 9rem; }
+.setup-page button { margin-block: .25rem; }
+.setup-page pre {
+    overflow: auto;
+    font-family: var(--font-mono);
+    padding: .65rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--log-bg);
+    color: var(--log-text);
+    margin-block: .5rem;
+}
+.setup-page [dir="ltr"] { unicode-bidi: isolate; }
+.setup-page [hidden] { display: none !important; }

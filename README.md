@@ -4,15 +4,13 @@
 
 Zyrln helps you access blocked sites through Google. Use a config from someone you trust, or create your own connection with a Google account and a Cloudflare Worker or VPS server. Results depend on your network.
 
-## Start here
+## Quick start
 
-| What do you have? | Follow this path |
-|---|---|
-| A config from someone you trust | Install the app and [connect with your config](#connect-with-a-config) |
-| No config; you want your own relay | Follow [Create your own relay](docs/relay-setup.md), then return here |
-| You only need direct access to Google services | Try [Direct mode](#direct-mode-no-relay-config) |
+**Have a config?** [Download the Android preview](https://github.com/ajavadinezhad/zyrln/releases/download/v2.1-pre-1/zyrln-2.1-pre-1-android.apk). Copy the config, open Zyrln, tap **Import from Clipboard**, then **Connect**. Allow the VPN prompt the first time. On a computer, see [desktop setup](#windows-linux-or-macos).
 
-A config contains a **Google Apps Script URL** ending in `/exec` and an **app key**. Never enter a VPS or Worker URL as the app's relay URL. Keep configs private: anyone with a working config can use its relay and quota.
+**No config?** For other sites and apps, ask someone you trust for one or [set up your own relay](docs/relay-setup.md). To try Google services, [Direct mode](#direct-mode-no-relay-config) needs no config.
+
+**Upgrading Android from v2.0?** Export your configs before uninstalling. Then install the preview and import them again.
 
 ## Download the right file
 
@@ -28,8 +26,6 @@ Open [Releases](https://github.com/ajavadinezhad/zyrln/releases), choose a relea
 
 The `-vps.zip` file is for server owners. You do not need it to use an existing config. GitHub's **Source code** archives are not the apps.
 
-**Upgrading Android from v2.0 to v2.1-pre-1:** export your configs first. The signing key changed, so uninstall the old app before installing the preview. Uninstalling removes app data; import your saved configs afterward.
-
 ## Connect with a config
 
 ### Android
@@ -39,7 +35,7 @@ You do not need a computer, browser proxy, or CA certificate.
 1. Install the Android APK.
 2. Copy the complete config text, including its opening `{` and closing `}`.
 3. Open Zyrln and use **Import**. Alternatively, use **+** and enter the Apps Script URL and app key manually.
-4. Select the imported profile, then tap **Connect** and allow Android's VPN permission.
+4. The imported profile is selected automatically. Tap **Connect** and allow Android's VPN permission.
 5. Open a website in your browser to check that traffic works. A successful Ping alone does not confirm browsing.
 
 Optional: disconnect before changing **Split tunnel** settings to choose which apps use Zyrln. To share a profile privately, use its share/export control.

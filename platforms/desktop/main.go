@@ -31,7 +31,7 @@ import (
 const defaultProxyAddress = "direct"
 
 // appVersion must match VERSION at repo root (Go embed cannot reference parent dirs).
-const appVersion = "2.1-pre-1"
+const appVersion = "2.1-pre-2"
 
 //go:embed gui/*
 var embeddedGUI embed.FS
@@ -994,6 +994,7 @@ func startGUIServer(listenAddr, configPath, caCertPath, caKeyPath string) {
 
 func newGUIHandler(configPath, caCertPath, caKeyPath string, startProxy guiProxyStarter, open func(string)) http.Handler {
 	mux := http.NewServeMux()
+	registerSetup(mux, checkSetupRelay)
 
 	mux.HandleFunc("/api/status", func(w http.ResponseWriter, r *http.Request) {
 		guiMu.Lock()

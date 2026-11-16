@@ -1622,3 +1622,6 @@ body.rtl .text-btn {
 .text-success {
     color: var(--accent-success) !important;
 }
+
+.setup-link { margin: 0 0 .75rem; }
+.setup-link a { color: inherit; text-underline-offset: .18em; }

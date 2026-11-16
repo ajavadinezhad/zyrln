@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Create a config · Zyrln</title>
+  <link rel="icon" href="zyrln-icon.png" type="image/png">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="setup.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&amp;family=JetBrains+Mono:wght@400;500&amp;family=Vazirmatn:wght@400;600;700;800&amp;display=swap" rel="stylesheet">
+  <script src="setup.js" defer></script>
+</head>
+<body class="setup-page dark-mode">
+<main>
+  <a href="/" id="back">Back to Zyrln</a>
+  <h1 id="title">Create your first config</h1>
+  <p id="intro">Choose where your relay will run. Both options use a Google account. Keep this tab open until you’ve saved your config.</p>
+  <fieldset class="card setup-choice">
+    <legend id="choose">1. Choose your relay</legend>
+    <label class="setup-option"><input type="radio" name="backend" value="cloudflare" checked> <span id="choose-worker">Cloudflare Worker</span></label>
+    <label class="setup-option"><input type="radio" name="backend" value="vps"> <span id="choose-vps">I have a VPS</span></label>
+  </fieldset>
+  <section class="card" id="worker">
+    <h2 id="worker-title">Set up Cloudflare</h2>
+    <p id="worker-requires">You’ll need a Cloudflare account and <a href="https://nodejs.org/" target="_blank" rel="noopener noreferrer">Node.js</a> with npm.</p>
+    <form id="worker-form">
+      <label for="host" id="host-label">Worker hostname</label>
+      <p id="host-help">Find your Workers subdomain in the <a href="https://dash.cloudflare.com/" target="_blank" rel="noopener noreferrer">Cloudflare dashboard</a>. Replace “your-subdomain” below with it. Choose a new Worker name if you already use zyrln-exit.</p>
+      <input id="host" dir="ltr" type="text" value="zyrln-exit.your-subdomain.workers.dev" autocomplete="off" spellcheck="false" required>
+      <button class="action-btn primary-action" id="prepare">Download Worker files</button>
+    </form>
+    <div id="deploy" hidden>
+      <p id="deploy-help">Unzip the download and open a terminal in that folder. Run these commands one at a time. When the second command asks for a secret, click Copy exit key and paste it into the terminal. If asked, create the new Worker.</p>
+      <pre dir="ltr">npx wrangler login
+npx wrangler secret put ZYRLN_RELAY_KEY
+npx wrangler deploy</pre>
+      <button class="action-btn" id="exit-key" type="button">Copy exit key</button>
+      <button class="action-btn primary-action" id="worker-ready" type="button">Worker deployed</button>
+      <p id="worker-help">Make sure Wrangler shows the hostname you entered and the TUNNEL_HUB binding.</p>
+    </div>
+  </section>
+  <section class="card" id="vps" hidden>
+    <h2 id="vps-title">Use your VPS</h2>
+    <label class="setup-option setup-existing"><input type="checkbox" id="existing-relay"> <span id="existing-label">Zyrln is already installed on my VPS</span></label>
+    <form id="vps-form">
+      <label for="vps-url" id="vps-url-label">VPS relay URL</label>
+      <input id="vps-url" dir="ltr" type="url" placeholder="http://YOUR_SERVER:8787/relay" autocomplete="off" spellcheck="false">
+      <p id="vps-url-help">Use the public address Google can reach, ending in <code dir="ltr">/relay</code>. For a new install you can leave this blank to use your SSH host and port 8787. HTTPS is recommended; with HTTP the exit key travels without encryption.</p>
+      <div id="vps-new-fields">
+        <label for="vps-ssh" id="vps-ssh-label">SSH login for the VPS</label>
+        <input id="vps-ssh" dir="ltr" type="text" placeholder="user@YOUR_SERVER" autocomplete="off" spellcheck="false" required>
+      </div>
+      <div id="vps-existing-fields" hidden>
+        <label for="vps-existing-key" id="vps-key-label">Existing VPS exit key</label>
+        <input id="vps-existing-key" dir="ltr" type="password" autocomplete="off" spellcheck="false" disabled required>
+      </div>
+      <button class="action-btn primary-action" id="vps-prepare">Continue</button>
+    </form>
+    <div id="vps-install" hidden>
+      <ol>
+        <li id="vps-download">Download the <a href="https://github.com/ajavadinezhad/zyrln/releases" target="_blank" rel="noopener noreferrer">VPS ZIP from Releases</a>, unzip it, and open a Bash terminal in that folder. On Windows use WSL or Git Bash.</li>
+        <li id="vps-run">Paste the command below into that terminal. When asked for the exit key, use the copy button and paste it. Your SSH user needs root or sudo access.</li>
+        <li id="vps-port">Allow incoming TCP port 8787 in the VPS provider’s firewall. If you use HTTPS, forward both relay and tunnel paths through the same proxy.</li>
+      </ol>
+      <pre dir="ltr" id="vps-command"></pre>
+      <button class="action-btn" type="button" id="copy-vps-command">Copy install command</button>
+      <button class="action-btn" type="button" id="vps-exit-key">Copy exit key</button>
+      <button class="action-btn primary-action" type="button" id="vps-ready">VPS installed</button>
+    </div>
+  </section>
+  <section class="card" id="google" hidden>
+    <h2 id="google-title">2. Connect Google</h2>
+    <ol>
+      <li id="google-open">Create a new project in <a href="https://script.google.com/" target="_blank" rel="noopener noreferrer">Google Apps Script</a>.</li>
+      <li id="google-paste">Copy the prepared script and replace the entire contents of the Google editor. Nothing needs editing.</li>
+      <li id="google-deploy">Choose <b dir="ltr">Deploy → New deployment → Web app</b>. Set <b dir="ltr">Execute as: Me</b> and <b dir="ltr">Who has access: Anyone</b>, then deploy.</li>
+      <li id="google-link">Copy the web app URL ending in <code dir="ltr">/exec</code> and paste it into the next step.</li>
+    </ol>
+    <button class="action-btn primary-action" id="script" type="button">Copy prepared script</button>
+  </section>
+  <section class="card" id="verify" hidden>
+    <h2 id="verify-title">3. Test and share</h2>
+    <form id="test-form">
+      <label for="endpoint" id="endpoint-label">Google web app URL</label>
+      <input id="endpoint" dir="ltr" type="url" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off" spellcheck="false" required>
+      <button class="action-btn primary-action" id="test">Test connection</button>
+    </form>
+    <div id="result" hidden>
+      <p id="success">The web request worked and the Android tunnel opened. Copy your config and share it only with people you trust.</p>
+      <button class="action-btn primary-action" id="copy" type="button">Copy config</button>
+      <button class="action-btn" id="save" type="button">Save to desktop profiles</button>
+      <p id="import-help">On Android, copy the config text, open Zyrln, tap Import from Clipboard, then Connect.</p>
+    </div>
+  </section>
+  <p id="status" role="status" aria-live="polite"></p>
+  <textarea id="manual-copy" aria-label="Text to copy" dir="ltr" readonly hidden></textarea>
+</main>
+</body>
+</html>

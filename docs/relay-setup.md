@@ -4,6 +4,8 @@
 
 Use this guide only if you do not already have a working config. You need a Google account and one exit: a Cloudflare Worker or a Linux VPS. A desktop Zyrln installation is not required to create an Android config.
 
+If your desktop build shows **Create your first config**, start there. Choose **Cloudflare Worker** or **I have a VPS**. If Zyrln is already installed on your VPS, enter its relay URL and exit key to skip installation. Otherwise the wizard prepares the install steps. For either option, it fills in the Google script and tests the connection before you share the config. The manual steps below also work without the desktop app.
+
 The order is: **choose exit → deploy exit → publish Google bridge → create app config**.
 
 ## 1. Prepare two separate keys
@@ -46,15 +48,15 @@ You need an amd64 or arm64 Linux VPS, SSH access, and root or sudo privileges. R
 
    Expected response: `ok`. This confirms the service is reachable, not that the full Google relay chain works.
 
-Keep your exit key. Your relay URL is `http://YOUR_VPS_IP:8787/relay` and tunnel URL is `http://YOUR_VPS_IP:8787/tunnel`.
+Keep your exit key. Your relay URL is `http://YOUR_VPS_IP:8787/relay`.
 
-These example URLs use HTTP. If you use them, the Google-to-VPS leg, including its exit key, is not protected by TLS. Use an HTTPS reverse proxy for transport protection on that leg and set both URLs accordingly.
+This example uses HTTP. It does not encrypt the connection from Google to the VPS, including the exit key. If you set up an HTTPS reverse proxy, point the relay URL at it and make sure it forwards both `/relay` and `/tunnel`.
 
 ## 3. Publish the Google Apps Script bridge
 
 1. Open [Google Apps Script](https://script.google.com) and create a **New project**.
 2. Replace the editor contents with the complete [Code.gs](../relay/deploy/apps-script/Code.gs) file.
-3. Replace the four constants at the top using **one** of the following examples. Keep the rest of the script.
+3. Set the app key, exit URL, and exit key using **one** of the following examples. Keep the rest of the script.
 
 **For Cloudflare:**
 
@@ -67,12 +69,12 @@ const EXIT_RELAY_KEY = "YOUR_EXIT_KEY";
 
 Use the Worker base URL, without `/relay`. An empty tunnel URL lets the script derive `/tunnel`.
 
-**For a VPS:**
+**For a VPS:** leave the tunnel URL empty here too. The script gets it from the relay URL.
 
 ```js
 const AUTH_KEY = "YOUR_APP_KEY";
 const EXIT_RELAY_URL = "http://YOUR_VPS_IP:8787/relay";
-const EXIT_TUNNEL_URL = "http://YOUR_VPS_IP:8787/tunnel";
+const EXIT_TUNNEL_URL = "";
 const EXIT_RELAY_KEY = "YOUR_EXIT_KEY";
 ```
 
@@ -83,13 +85,7 @@ const EXIT_RELAY_KEY = "YOUR_EXIT_KEY";
 
 ## 4. Create your app config
 
-Fill in this template with the **Apps Script URL** and **app key**:
-
-```json
-{"url":"https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec","key":"YOUR_APP_KEY"}
-```
-
-Copy the full JSON and follow [Android connection steps](../README.md#android), or enter the two values manually on desktop. Do not put the Worker/VPS URL or exit key in the app config.
+In Zyrln, choose **+**, enter the Google web app URL and app key, then save and connect. You can export the saved profile from the app if you want to share it privately.
 
 ## Check before sharing
 
